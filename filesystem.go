@@ -36,12 +36,12 @@ func (s *Container) FileRead(ctx context.Context, targetFile string, shouldReadE
 	return strings.Join(lines[start:end], "\n"), nil
 }
 
-func (s *Container) FileWrite(ctx context.Context, targetFile string, contents string) error {
-	return s.apply(ctx, s.state.WithNewFile(targetFile, contents))
+func (s *Container) FileWrite(ctx context.Context, explanation, targetFile, contents string) error {
+	return s.apply(ctx, "Write "+targetFile, explanation, s.state.WithNewFile(targetFile, contents))
 }
 
-func (s *Container) FileDelete(ctx context.Context, targetFile string) error {
-	return s.apply(ctx, s.state.WithoutFile(targetFile))
+func (s *Container) FileDelete(ctx context.Context, explanation, targetFile string) error {
+	return s.apply(ctx, "Delete "+targetFile, explanation, s.state.WithoutFile(targetFile))
 }
 
 func (s *Container) FileList(ctx context.Context, path string) (string, error) {
@@ -69,8 +69,8 @@ func urlToDirectory(url string) *dagger.Directory {
 	}
 }
 
-func (s *Container) Upload(ctx context.Context, source string, target string) error {
-	return s.apply(ctx, s.state.WithDirectory(target, urlToDirectory(source)))
+func (s *Container) Upload(ctx context.Context, explanation, source string, target string) error {
+	return s.apply(ctx, "Upload "+source+" to "+target, explanation, s.state.WithDirectory(target, urlToDirectory(source)))
 }
 
 func (s *Container) Download(ctx context.Context, source string, target string) error {

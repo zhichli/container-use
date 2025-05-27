@@ -25,6 +25,8 @@ func init() {
 	RegisterTool(
 		ContainerCreateTool,
 		ContainerListTool,
+		ContainerHistoryTool,
+		ContainerRevertTool,
 
 		ContainerRunCmdTool,
 
@@ -56,7 +58,10 @@ var ContainerCreateTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		sandbox := CreateContainer(image)
+		sandbox, err := CreateContainer(request.GetString("explanation", ""), image)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to create container", err), nil
+		}
 		return mcp.NewToolResultText(fmt.Sprintf(`{"id": %q}`, sandbox.ID)), nil
 	},
 }
@@ -75,6 +80,76 @@ var ContainerListTool = &Tool{
 			return nil, err
 		}
 		return mcp.NewToolResultText(string(out)), nil
+	},
+}
+
+var ContainerHistoryTool = &Tool{
+	Definition: mcp.NewTool("container_history",
+		mcp.WithDescription("List the history of a container."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this container is being listed."),
+		),
+		mcp.WithString("container_id",
+			mcp.Description("The ID of the container for this command. Must call `container_create` first."),
+			mcp.Required(),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		containerID, err := request.RequireString("container_id")
+		if err != nil {
+			return nil, err
+		}
+
+		container := GetContainer(containerID)
+		if container == nil {
+			return nil, errors.New("container not found")
+		}
+
+		history := container.History
+		out, err := json.Marshal(history)
+		if err != nil {
+			return nil, err
+		}
+		return mcp.NewToolResultText(string(out)), nil
+	},
+}
+
+var ContainerRevertTool = &Tool{
+	Definition: mcp.NewTool("container_revert",
+		mcp.WithDescription("Revert the container to a specific version."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this container is being listed."),
+		),
+		mcp.WithString("container_id",
+			mcp.Description("The ID of the container for this command. Must call `container_create` first."),
+			mcp.Required(),
+		),
+		mcp.WithNumber("version",
+			mcp.Description("The version to revert to."),
+			mcp.Required(),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		containerID, err := request.RequireString("container_id")
+		if err != nil {
+			return nil, err
+		}
+
+		container := GetContainer(containerID)
+		if container == nil {
+			return nil, errors.New("container not found")
+		}
+
+		version, err := request.RequireInt("version")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := container.Revert(ctx, request.GetString("explanation", ""), Version(version)); err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to revert container", err), nil
+		}
+
+		return mcp.NewToolResultText("container reverted successfully"), nil
 	},
 }
 
@@ -114,7 +189,7 @@ var ContainerRunCmdTool = &Tool{
 		if !ok {
 			shell = "bash"
 		}
-		stdout, err := container.Run(ctx, command, shell)
+		stdout, err := container.Run(ctx, request.GetString("explanation", ""), command, shell)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
@@ -160,7 +235,7 @@ var ContainerUploadTool = &Tool{
 			return nil, err
 		}
 
-		if err := container.Upload(ctx, source, target); err != nil {
+		if err := container.Upload(ctx, request.GetString("explanation", ""), source, target); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to upload files", err), nil
 		}
 
@@ -389,7 +464,7 @@ var ContainerFileWriteTool = &Tool{
 			return nil, err
 		}
 
-		if err := container.FileWrite(ctx, targetFile, contents); err != nil {
+		if err := container.FileWrite(ctx, request.GetString("explanation", ""), targetFile, contents); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to write file", err), nil
 		}
 
@@ -427,7 +502,7 @@ var ContainerFileDeleteTool = &Tool{
 			return nil, err
 		}
 
-		if err := container.FileDelete(ctx, targetFile); err != nil {
+		if err := container.FileDelete(ctx, request.GetString("explanation", ""), targetFile); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to delete file", err), nil
 		}
 

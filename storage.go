@@ -17,24 +17,26 @@ func saveState(c *Container) error {
 		return err
 	}
 
-	stateDir, err := homedir.Expand(fmt.Sprintf("~/.config/container-use/%s", c.ID))
+	containerDir, err := homedir.Expand(fmt.Sprintf("~/.config/container-use/%s", c.ID))
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(stateDir, 0755); err != nil {
+	statesDir := filepath.Join(containerDir, "states")
+	if err := os.MkdirAll(statesDir, 0755); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(stateDir, "container.json"), data, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(containerDir, "container.json"), data, 0644); err != nil {
 		return err
 	}
 
-	stateID, err := c.state.ID(context.Background())
+	latest := c.History.Latest()
+	stateID, err := latest.state.ID(context.Background())
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(stateDir, "state"), []byte(stateID), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(statesDir, fmt.Sprintf("%d", latest.Version)), []byte(stateID), 0644); err != nil {
 		return err
 	}
 
@@ -69,12 +71,15 @@ func loadState() (map[string]*Container, error) {
 		if err := json.Unmarshal(data, &c); err != nil {
 			return nil, err
 		}
-		state := filepath.Join(stateDir, id, "state")
-		data, err = os.ReadFile(state)
-		if err != nil {
-			return nil, err
+		for _, revision := range c.History {
+			state := filepath.Join(stateDir, id, "states", fmt.Sprintf("%d", revision.Version))
+			data, err = os.ReadFile(state)
+			if err != nil {
+				return nil, err
+			}
+			revision.state = dag.LoadContainerFromID(dagger.ContainerID(data))
 		}
-		c.state = dag.LoadContainerFromID(dagger.ContainerID(data))
+		c.state = c.History.Latest().state
 
 		containers[id] = &c
 	}
