@@ -25,6 +25,7 @@ func init() {
 	RegisterTool(
 		ContainerCreateTool,
 		ContainerListTool,
+		ContainerForkTool,
 
 		ContainerRunCmdTool,
 
@@ -119,6 +120,37 @@ var ContainerRunCmdTool = &Tool{
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
 		return mcp.NewToolResultText(stdout), nil
+	},
+}
+
+var ContainerForkTool = &Tool{
+	Definition: mcp.NewTool("container_fork",
+		mcp.WithDescription("Fork (clone) an existing container to create a new container with the same state."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this container is being forked."),
+		),
+		mcp.WithString("source_container_id",
+			mcp.Description("The ID of the source container to fork from. Must be an existing container."),
+			mcp.Required(),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		sourceContainerID, err := request.RequireString("source_container_id")
+		if err != nil {
+			return nil, err
+		}
+
+		sourceContainer := GetContainer(sourceContainerID)
+		if sourceContainer == nil {
+			return nil, errors.New("source container not found")
+		}
+
+		newContainer := ForkContainer(sourceContainerID)
+		if newContainer == nil {
+			return nil, errors.New("failed to fork container")
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf(`{"id": %q, "forked_from": %q}`, newContainer.ID, sourceContainerID)), nil
 	},
 }
 

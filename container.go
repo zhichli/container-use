@@ -46,6 +46,25 @@ func CreateContainer(image string) *Container {
 	return container
 }
 
+func ForkContainer(sourceID string) *Container {
+	source := GetContainer(sourceID)
+	if source == nil {
+		return nil
+	}
+
+	id := uuid.New().String()
+	container := &Container{
+		ID:    id,
+		Image: source.Image,
+		state: source.state,
+	}
+	containers[container.ID] = container
+	if err := saveState(container); err != nil {
+		panic(err)
+	}
+	return container
+}
+
 func GetContainer(id string) *Container {
 	return containers[id]
 }
