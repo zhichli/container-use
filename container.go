@@ -14,10 +14,10 @@ import (
 type Version int
 
 type Revision struct {
-	Version     Version
-	Name        string
-	Explanation string
-	CreatedAt   time.Time
+	Version     Version   `json:"version"`
+	Name        string    `json:"name"`
+	Explanation string    `json:"explanation"`
+	CreatedAt   time.Time `json:"created_at"`
 
 	state *dagger.Container
 }
@@ -49,9 +49,10 @@ func (h History) Get(version Version) *Revision {
 }
 
 type Container struct {
-	ID      string
-	Image   string
-	History History
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Image   string  `json:"image"`
+	History History `json:"history"`
 
 	mu    sync.Mutex
 	state *dagger.Container
@@ -68,10 +69,10 @@ func LoadContainers() error {
 	return nil
 }
 
-func CreateContainer(explanation, image string) (*Container, error) {
-	id := uuid.New().String()
+func CreateContainer(name, explanation, image string) (*Container, error) {
 	container := &Container{
-		ID:    id,
+		ID:    uuid.New().String(),
+		Name:  name,
 		Image: image,
 	}
 	err := container.apply(context.Background(), "Create container from "+image, explanation, dag.Container().
@@ -142,4 +143,25 @@ func (s *Container) Revert(ctx context.Context, explanation string, version Vers
 		return err
 	}
 	return nil
+}
+
+func (s *Container) Fork(ctx context.Context, explanation, name string, version *Version) (*Container, error) {
+	revision := s.History.Latest()
+	if version != nil {
+		revision = s.History.Get(*version)
+	}
+	if revision == nil {
+		return nil, errors.New("version not found")
+	}
+
+	forkedContainer := &Container{
+		ID:    uuid.New().String(),
+		Name:  name,
+		Image: s.Image,
+	}
+	if err := forkedContainer.apply(ctx, "Fork from "+s.Name, explanation, revision.state); err != nil {
+		return nil, err
+	}
+	containers[forkedContainer.ID] = forkedContainer
+	return forkedContainer, nil
 }

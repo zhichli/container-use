@@ -27,6 +27,7 @@ func init() {
 		ContainerListTool,
 		ContainerHistoryTool,
 		ContainerRevertTool,
+		ContainerForkTool,
 
 		ContainerRunCmdTool,
 
@@ -45,6 +46,10 @@ var ContainerCreateTool = &Tool{
 	Definition: mcp.NewTool("container_create",
 		mcp.WithDescription(`Create a new container. The sandbox only contains the base image specified, anything else required will need to be installed by hand.
 		You won't be able to access your local filesystem directly. If you need to manipulate the filesystem, first you will have to call "container_upload"`),
+		mcp.WithString("name",
+			mcp.Description("The name of the container."),
+			mcp.Required(),
+		),
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this sandbox is being created."),
 		),
@@ -54,11 +59,15 @@ var ContainerCreateTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		name, err := request.RequireString("name")
+		if err != nil {
+			return nil, err
+		}
 		image, err := request.RequireString("image")
 		if err != nil {
 			return nil, err
 		}
-		sandbox, err := CreateContainer(request.GetString("explanation", ""), image)
+		sandbox, err := CreateContainer(name, request.GetString("explanation", ""), image)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create container", err), nil
 		}
@@ -80,6 +89,54 @@ var ContainerListTool = &Tool{
 			return nil, err
 		}
 		return mcp.NewToolResultText(string(out)), nil
+	},
+}
+
+var ContainerForkTool = &Tool{
+	Definition: mcp.NewTool("container_fork",
+		mcp.WithDescription("Create a new container from an existing container."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this container is being forked."),
+		),
+		mcp.WithString("container_id",
+			mcp.Description("The ID of the container to fork."),
+			mcp.Required(),
+		),
+		mcp.WithNumber("version",
+			mcp.Description("Version of the container to fork. Defaults to latest version."),
+		),
+		mcp.WithString("name",
+			mcp.Description("Name of the new container."),
+			mcp.Required(),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		containerID, err := request.RequireString("container_id")
+		if err != nil {
+			return nil, err
+		}
+
+		container := GetContainer(containerID)
+		if container == nil {
+			return nil, errors.New("container not found")
+		}
+
+		name, err := request.RequireString("name")
+		if err != nil {
+			return nil, err
+		}
+
+		var version *Version
+		if v, ok := request.GetArguments()["version"].(Version); ok {
+			version = &v
+		}
+
+		fork, err := container.Fork(ctx, request.GetString("explanation", ""), name, version)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to fork container", err), nil
+		}
+
+		return mcp.NewToolResultText("container forked successfully into ID " + fork.ID), nil
 	},
 }
 
