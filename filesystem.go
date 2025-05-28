@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"dagger.io/dagger"
@@ -87,14 +88,69 @@ func (s *Container) Download(ctx context.Context, source string, target string) 
 	return nil
 }
 
-func (s *Container) Diff(ctx context.Context, source string, target string) (string, error) {
+func (s *Container) RemoteDiff(ctx context.Context, source string, target string) (string, error) {
 	sourceDir := urlToDirectory(source)
 	targetDir := s.state.Directory(target)
 
-	diff, err := dag.Container().From("alpine").
+	diff, err := dag.Container().From(AlpineImage).
 		WithMountedDirectory("/source", sourceDir).
 		WithMountedDirectory("/target", targetDir).
 		WithExec([]string{"diff", "-burN", "/source", "/target"}, dagger.ContainerWithExecOpts{
+			Expect: dagger.ReturnTypeAny,
+		}).
+		Stdout(ctx)
+	if err != nil {
+		var exitErr *dagger.ExecError
+		if errors.As(err, &exitErr) {
+			return fmt.Sprintf("command failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr), nil
+		}
+		return "", err
+	}
+	return diff, nil
+}
+
+func (s *Container) RevisionDiff(ctx context.Context, path string, fromVersion, toVersion Version) (string, error) {
+	revisionDiff, err := s.revisionDiff(ctx, path, fromVersion, toVersion, true)
+	if err != nil {
+		if strings.Contains(err.Error(), "not a directory") {
+			return s.revisionDiff(ctx, path, fromVersion, toVersion, false)
+		}
+		return "", err
+	}
+	return revisionDiff, nil
+}
+
+func (s *Container) revisionDiff(ctx context.Context, path string, fromVersion, toVersion Version, directory bool) (string, error) {
+	if path == "" {
+		path = s.Workdir
+	}
+	diffCtr := dag.Container().
+		From(AlpineImage).
+		WithWorkdir("/diffs")
+	if directory {
+		diffCtr = diffCtr.
+			WithMountedDirectory(
+				filepath.Join("versions", fmt.Sprintf("%d", fromVersion)),
+				s.History.Get(fromVersion).state.Directory(path)).
+			WithMountedDirectory(
+				filepath.Join("versions", fmt.Sprintf("%d", toVersion)),
+				s.History.Get(toVersion).state.Directory(path))
+	} else {
+		diffCtr = diffCtr.
+			WithMountedFile(
+				filepath.Join("versions", fmt.Sprintf("%d", fromVersion)),
+				s.History.Get(fromVersion).state.File(path)).
+			WithMountedFile(
+				filepath.Join("versions", fmt.Sprintf("%d", toVersion)),
+				s.History.Get(toVersion).state.File(path))
+	}
+
+	diffCmd := []string{"diff", "-burN",
+		filepath.Join("versions", fmt.Sprintf("%d", fromVersion)),
+		filepath.Join("versions", fmt.Sprintf("%d", toVersion)),
+	}
+	diff, err := diffCtr.
+		WithExec(diffCmd, dagger.ContainerWithExecOpts{
 			Expect: dagger.ReturnTypeAny,
 		}).
 		Stdout(ctx)

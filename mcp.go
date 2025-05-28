@@ -39,6 +39,7 @@ func init() {
 		ContainerFileListTool,
 		ContainerFileWriteTool,
 		ContainerFileDeleteTool,
+		ContainerRevisionDiffTool,
 	)
 }
 
@@ -57,6 +58,10 @@ var ContainerCreateTool = &Tool{
 			mcp.Description("The base image this workspace will use (e.g. alpine:latest, ubuntu:24.04, etc.)"),
 			mcp.Required(),
 		),
+		mcp.WithString("workdir",
+			mcp.Description(`Working directory for the container. All commands will be executed in this directory and all file operations will be relative to this. Defaults to "/workdir"`),
+			mcp.Required(),
+		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name, err := request.RequireString("name")
@@ -67,7 +72,8 @@ var ContainerCreateTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		sandbox, err := CreateContainer(name, request.GetString("explanation", ""), image)
+		workdir := request.GetString("workdir", "/workdir")
+		sandbox, err := CreateContainer(name, request.GetString("explanation", ""), image, workdir)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create container", err), nil
 		}
@@ -347,8 +353,8 @@ var ContainerDownloadTool = &Tool{
 }
 
 var ContainerDiffTool = &Tool{
-	Definition: mcp.NewTool("container_diff",
-		mcp.WithDescription("Diff files between a container and the local filesystem."),
+	Definition: mcp.NewTool("container_remote_diff",
+		mcp.WithDescription("Diff files between a container and the local filesystem or git repository."),
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this diff is being run."),
 		),
@@ -384,7 +390,7 @@ var ContainerDiffTool = &Tool{
 			return nil, errors.New("target must be a string")
 		}
 
-		diff, err := container.Diff(ctx, source, target)
+		diff, err := container.RemoteDiff(ctx, source, target)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to diff", err), nil
 		}
@@ -404,7 +410,7 @@ var ContainerFileReadTool = &Tool{
 			mcp.Required(),
 		),
 		mcp.WithString("target_file",
-			mcp.Description("Path of the file to read."),
+			mcp.Description("Path of the file to read, absolute or relative to the workdir"),
 			mcp.Required(),
 		),
 		mcp.WithBoolean("should_read_entire_file",
@@ -455,7 +461,7 @@ var ContainerFileListTool = &Tool{
 			mcp.Required(),
 		),
 		mcp.WithString("path",
-			mcp.Description("Path of the directory to list contents of."),
+			mcp.Description("Path of the directory to list contents of, absolute or relative to the workdir"),
 			mcp.Required(),
 		),
 	),
@@ -494,7 +500,7 @@ var ContainerFileWriteTool = &Tool{
 			mcp.Required(),
 		),
 		mcp.WithString("target_file",
-			mcp.Description("Path of the file to write."),
+			mcp.Description("Path of the file to write, absolute or relative to the workdir."),
 			mcp.Required(),
 		),
 		mcp.WithString("contents",
@@ -540,7 +546,7 @@ var ContainerFileDeleteTool = &Tool{
 			mcp.Required(),
 		),
 		mcp.WithString("target_file",
-			mcp.Description("Path of the file to delete."),
+			mcp.Description("Path of the file to delete, absolute or relative to the workdir."),
 			mcp.Required(),
 		),
 	),
@@ -564,5 +570,52 @@ var ContainerFileDeleteTool = &Tool{
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully", targetFile)), nil
+	},
+}
+
+var ContainerRevisionDiffTool = &Tool{
+	Definition: mcp.NewTool("container_revision_diff",
+		mcp.WithDescription("Diff files between multiple revisions of a container."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this diff is being run."),
+		),
+		mcp.WithString("container_id",
+			mcp.Description("The ID of the container for this command. Must call `container_create` first."),
+			mcp.Required(),
+		),
+		mcp.WithString("path",
+			mcp.Description("The path within the container to be diffed. Defaults to workdir."),
+		),
+		mcp.WithNumber("from_version",
+			mcp.Description("Compute the diff starting from this version"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("to_version",
+			mcp.Description("Compute the diff ending at this version. Defaults to latest version."),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		containerID, err := request.RequireString("container_id")
+		if err != nil {
+			return nil, err
+		}
+		container := GetContainer(containerID)
+		if container == nil {
+			return nil, errors.New("container not found")
+		}
+
+		path := request.GetString("path", "")
+		fromVersion, err := request.RequireInt("from_version")
+		if err != nil {
+			return nil, err
+		}
+		toVersion := request.GetInt("to_version", int(container.History.LatestVersion()))
+
+		diff, err := container.RevisionDiff(ctx, path, Version(fromVersion), Version(toVersion))
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to diff", err), nil
+		}
+
+		return mcp.NewToolResultText(diff), nil
 	},
 }
