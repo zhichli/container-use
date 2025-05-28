@@ -234,6 +234,13 @@ var ContainerRunCmdTool = &Tool{
 			mcp.Description("The shell that will be interpreting this command (default: sh)"),
 			mcp.Required(),
 		),
+		mcp.WithBoolean("background",
+			mcp.Description("Run the command in the background. Must always be set for long running command (e.g. http server)"),
+		),
+		mcp.WithArray("ports",
+			mcp.Description("Ports to expose. Only works with background containers. The tool will return the address to reach each port."),
+			mcp.Items(map[string]any{"type": "number"}),
+		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		containerID, err := request.RequireString("container_id")
@@ -252,6 +259,27 @@ var ContainerRunCmdTool = &Tool{
 		if !ok {
 			shell = "bash"
 		}
+
+		background := request.GetBool("background", false)
+		if background {
+			portList := request.GetArguments()["ports"].([]any)
+			ports := make([]int, len(portList))
+			for i, port := range portList {
+				ports[i] = int(port.(float64))
+			}
+			endpoints, err := container.RunBackground(ctx, request.GetString("explanation", ""), command, shell, ports)
+			if err != nil {
+				return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
+			}
+
+			out, err := json.Marshal(endpoints)
+			if err != nil {
+				return nil, err
+			}
+
+			return mcp.NewToolResultText(fmt.Sprintf("Command started in the background. Endpoints are %s", string(out))), nil
+		}
+
 		stdout, err := container.Run(ctx, request.GetString("explanation", ""), command, shell)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil

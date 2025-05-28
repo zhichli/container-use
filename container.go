@@ -150,6 +150,43 @@ func (s *Container) Run(ctx context.Context, explanation, command, shell string)
 	return stdout, nil
 }
 
+func (s *Container) RunBackground(ctx context.Context, explanation, command, shell string, ports []int) (map[int]string, error) {
+	serviceState := s.state
+	for _, port := range ports {
+		serviceState = serviceState.WithExposedPort(port, dagger.ContainerWithExposedPortOpts{
+			Protocol:    dagger.NetworkProtocolTcp,
+			Description: fmt.Sprintf("Port %d", port),
+		})
+	}
+
+	svc, err := serviceState.AsService(dagger.ContainerAsServiceOpts{
+		Args: []string{shell, "-c", command},
+	}).Start(context.Background())
+	if err != nil {
+		var exitErr *dagger.ExecError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("command failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr)
+		}
+		return nil, err
+	}
+
+	endpoints := map[int]string{}
+	for _, port := range ports {
+		tunnel, err := dag.Host().Tunnel(svc, dagger.HostTunnelOpts{Native: true}).Start(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		endpoints[port], err = tunnel.Endpoint(ctx, dagger.ServiceEndpointOpts{
+			Port: port,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return endpoints, nil
+}
+
 func (s *Container) Revert(ctx context.Context, explanation string, version Version) error {
 	revision := s.History.Get(version)
 	if revision == nil {
