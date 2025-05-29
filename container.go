@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,8 +135,14 @@ func (s *Container) apply(ctx context.Context, name, explanation string, newStat
 	return saveState(s)
 }
 
-func (s *Container) Run(ctx context.Context, explanation, command, shell string) (string, error) {
-	newState := s.state.WithExec([]string{shell, "-c", command})
+func (s *Container) Run(ctx context.Context, explanation, command, shell string, useEntrypoint bool) (string, error) {
+	args := []string{}
+	if command != "" {
+		args = []string{shell, "-c", command}
+	}
+	newState := s.state.WithExec(args, dagger.ContainerWithExecOpts{
+		UseEntrypoint: useEntrypoint,
+	})
 	stdout, err := newState.Stdout(ctx)
 	if err != nil {
 		var exitErr *dagger.ExecError
@@ -150,8 +158,21 @@ func (s *Container) Run(ctx context.Context, explanation, command, shell string)
 	return stdout, nil
 }
 
-func (s *Container) RunBackground(ctx context.Context, explanation, command, shell string, ports []int) (map[int]string, error) {
+type EndpointMapping struct {
+	Internal string `json:"internal"`
+	External string `json:"external"`
+}
+
+type EndpointMappings map[int]*EndpointMapping
+
+func (s *Container) RunBackground(ctx context.Context, explanation, command, shell string, ports []int, useEntrypoint bool) (EndpointMappings, error) {
+	args := []string{}
+	if command != "" {
+		args = []string{shell, "-c", command}
+	}
 	serviceState := s.state
+
+	// Expose ports
 	for _, port := range ports {
 		serviceState = serviceState.WithExposedPort(port, dagger.ContainerWithExposedPortOpts{
 			Protocol:    dagger.NetworkProtocolTcp,
@@ -159,8 +180,10 @@ func (s *Container) RunBackground(ctx context.Context, explanation, command, she
 		})
 	}
 
+	// Start the service
 	svc, err := serviceState.AsService(dagger.ContainerAsServiceOpts{
-		Args: []string{shell, "-c", command},
+		Args:          args,
+		UseEntrypoint: useEntrypoint,
 	}).Start(context.Background())
 	if err != nil {
 		var exitErr *dagger.ExecError
@@ -170,21 +193,58 @@ func (s *Container) RunBackground(ctx context.Context, explanation, command, she
 		return nil, err
 	}
 
-	endpoints := map[int]string{}
+	endpoints := EndpointMappings{}
+	hostForwards := []dagger.PortForward{}
+
 	for _, port := range ports {
-		tunnel, err := dag.Host().Tunnel(svc, dagger.HostTunnelOpts{Native: true}).Start(context.Background())
+		endpoints[port] = &EndpointMapping{}
+		hostForwards = append(hostForwards, dagger.PortForward{
+			Backend:  port,
+			Frontend: rand.Intn(1000) + 5000,
+			Protocol: dagger.NetworkProtocolTcp,
+		})
+	}
+
+	// Expose ports on the host
+	tunnel, err := dag.Host().Tunnel(svc, dagger.HostTunnelOpts{Ports: hostForwards}).Start(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve endpoints
+	for _, forward := range hostForwards {
+		externalEndpoint, err := tunnel.Endpoint(ctx, dagger.ServiceEndpointOpts{
+			Port: forward.Frontend,
+		})
 		if err != nil {
 			return nil, err
 		}
-		endpoints[port], err = tunnel.Endpoint(ctx, dagger.ServiceEndpointOpts{
+
+		endpoints[forward.Backend].External = externalEndpoint
+	}
+	for port, endpoint := range endpoints {
+		internalEndpoint, err := svc.Endpoint(ctx, dagger.ServiceEndpointOpts{
 			Port: port,
 		})
 		if err != nil {
 			return nil, err
 		}
+		endpoint.Internal = internalEndpoint
 	}
 
 	return endpoints, nil
+}
+
+func (s *Container) SetEnv(ctx context.Context, explanation string, envs []string) error {
+	state := s.state
+	for _, env := range envs {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid environment variable: %s", env)
+		}
+		state = state.WithEnvVariable(parts[0], parts[1])
+	}
+	return s.apply(ctx, "Set env "+strings.Join(envs, ", "), explanation, state)
 }
 
 func (s *Container) Revert(ctx context.Context, explanation string, version Version) error {

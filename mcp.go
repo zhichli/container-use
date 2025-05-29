@@ -30,6 +30,7 @@ func init() {
 		ContainerForkTool,
 
 		ContainerRunCmdTool,
+		ContainerSetEnvTool,
 
 		ContainerUploadTool,
 		ContainerDownloadTool,
@@ -227,18 +228,19 @@ var ContainerRunCmdTool = &Tool{
 			mcp.Required(),
 		),
 		mcp.WithString("command",
-			mcp.Description("The terminal command to execute"),
-			mcp.Required(),
+			mcp.Description("The terminal command to execute. If empty, the container's default command is used."),
 		),
 		mcp.WithString("shell",
 			mcp.Description("The shell that will be interpreting this command (default: sh)"),
-			mcp.Required(),
 		),
 		mcp.WithBoolean("background",
 			mcp.Description("Run the command in the background. Must always be set for long running command (e.g. http server)"),
 		),
+		mcp.WithBoolean("use_entrypoint",
+			mcp.Description("Use the image entrypoint, if present, by prepending it to the args."),
+		),
 		mcp.WithArray("ports",
-			mcp.Description("Ports to expose. Only works with background containers. The tool will return the address to reach each port."),
+			mcp.Description("Ports to expose. Only works with background containers. For each port, returns the internal (for use by other containers) and external (for use by the user) address."),
 			mcp.Items(map[string]any{"type": "number"}),
 		),
 	),
@@ -251,23 +253,18 @@ var ContainerRunCmdTool = &Tool{
 		if container == nil {
 			return nil, errors.New("container not found")
 		}
-		command, err := request.RequireString("command")
-		if err != nil {
-			return nil, errors.New("command must be a string")
-		}
-		shell, ok := request.GetArguments()["shell"].(string)
-		if !ok {
-			shell = "bash"
-		}
+		command := request.GetString("command", "")
+		shell := request.GetString("shell", "sh")
 
 		background := request.GetBool("background", false)
 		if background {
-			portList := request.GetArguments()["ports"].([]any)
-			ports := make([]int, len(portList))
-			for i, port := range portList {
-				ports[i] = int(port.(float64))
+			ports := []int{}
+			if portList, ok := request.GetArguments()["ports"].([]any); ok {
+				for _, port := range portList {
+					ports = append(ports, int(port.(float64)))
+				}
 			}
-			endpoints, err := container.RunBackground(ctx, request.GetString("explanation", ""), command, shell, ports)
+			endpoints, err := container.RunBackground(ctx, request.GetString("explanation", ""), command, shell, ports, request.GetBool("use_entrypoint", false))
 			if err != nil {
 				return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 			}
@@ -280,11 +277,46 @@ var ContainerRunCmdTool = &Tool{
 			return mcp.NewToolResultText(fmt.Sprintf("Command started in the background. Endpoints are %s", string(out))), nil
 		}
 
-		stdout, err := container.Run(ctx, request.GetString("explanation", ""), command, shell)
+		stdout, err := container.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
 		return mcp.NewToolResultText(stdout), nil
+	},
+}
+
+var ContainerSetEnvTool = &Tool{
+	Definition: mcp.NewTool("container_set_env",
+		mcp.WithDescription("Set environment variables for a container."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why these environment variables are being set."),
+		),
+		mcp.WithString("container_id",
+			mcp.Description("The ID of the container for this command. Must call `container_create` first."),
+			mcp.Required(),
+		),
+		mcp.WithArray("envs",
+			mcp.Description("The environment variables to set."),
+			mcp.Items(map[string]any{"type": "string"}),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		containerID, err := request.RequireString("container_id")
+		if err != nil {
+			return nil, err
+		}
+		container := GetContainer(containerID)
+		if container == nil {
+			return nil, errors.New("container not found")
+		}
+		envs, err := request.RequireStringSlice("envs")
+		if err != nil {
+			return nil, err
+		}
+		if err := container.SetEnv(ctx, request.GetString("explanation", ""), envs); err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to set environment variables", err), nil
+		}
+		return mcp.NewToolResultText("environment variables set successfully"), nil
 	},
 }
 
