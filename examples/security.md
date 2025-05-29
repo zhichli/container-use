@@ -1,10 +1,8 @@
 # Dependency Security Audit
 
-For the dagger/dagger GitHub repository (written in Go).
-
 1. Analyze project dependencies:
-   - Setup a sandbox and upload the repository to it.
-   - Check the go.mod
+ . - Run the analysis in a sandbox using the latest Go version.
+   - Check go.mod
    - List all dependencies with versions
    - Identify outdated packages
 
@@ -13,5 +11,7 @@ For the dagger/dagger GitHub repository (written in Go).
    - Identify dependencies with critical security issues
 
 3. Upgrade those packages
-   - Perform the updates
-   - Show a diff
+   - Perform the updates in the sandbox.
+   - Make sure the code still builds after updating.
+   - Show me a history of the sandbox along with a diff after the updates are complete.
+   - Export a `deps-update.patch` locally
