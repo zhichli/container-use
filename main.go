@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"dagger.io/dagger"
@@ -12,16 +13,23 @@ import (
 var dag *dagger.Client
 
 func main() {
+	if err := setupLogger(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to setup logger: %v\n", err)
+		os.Exit(1)
+	}
+
+	slog.Info("connecting to dagger")
 	var err error
-	dag, err = dagger.Connect(context.Background(), dagger.WithLogOutput(os.Stderr))
+	dag, err = dagger.Connect(context.Background(), dagger.WithLogOutput(logWriter))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error starting dagger: %v\n", err)
+		slog.Error("Error starting dagger", "error", err)
 		os.Exit(1)
 	}
 	defer dag.Close()
 
+	slog.Info("loading container state")
 	if err := LoadContainers(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading containers: %v\n", err)
+		slog.Error("Error loading containers", "error", err)
 		os.Exit(1)
 	}
 
@@ -34,8 +42,9 @@ func main() {
 		s.AddTool(t.Definition, t.Handler)
 	}
 
+	slog.Info("starting server")
 	if err := server.ServeStdio(s); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+		slog.Error("Server error", "error", err)
 		os.Exit(1)
 	}
 }

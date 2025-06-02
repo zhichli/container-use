@@ -24,6 +24,8 @@ extensions:
     - run
     - <path to checked out repo>
     cmd: go
+    envs:
+      CU_STDERR_FILE: /tmp/cu.debug.stderr.log
 ```
 
 ## Examples
