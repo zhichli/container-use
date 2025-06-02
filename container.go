@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"strings"
 	"sync"
@@ -83,8 +84,18 @@ func CreateContainer(name, explanation, image, workdir string) (*Container, erro
 		Image:   image,
 		Workdir: workdir,
 	}
-	err := container.apply(context.Background(), "Create container from "+image, explanation, dag.Container().
+
+	slog.Info("Creating container", "id", container.ID, "name", container.Name, "image", container.Image, "workdir", container.Workdir)
+	worktreePath, err := container.InitializeWorktree(".")
+	if err != nil {
+		return nil, fmt.Errorf("failed intializing worktree: %w", err)
+	}
+
+	hostDir := dag.Host().Directory(worktreePath)
+
+	err = container.apply(context.Background(), "Create container from "+image, explanation, dag.Container().
 		From(image).
+		WithDirectory(workdir, hostDir).
 		WithWorkdir(workdir).
 		WithDirectory(".", dag.Directory())) // Force workdir to exist
 
