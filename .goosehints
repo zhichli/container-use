@@ -2,5 +2,4 @@ ALWAYS use container_* tools for ALL actions involving code, files, or terminal 
 NEVER use built-in, developer, or non-container tools for any file, codebase, or command-line operation. If there is any ambiguity, DEFAULT to the container tool.
 Violating this policy will COMPROMISE security and reproducibility.
 
-When a user requests actions on the current local directory, always upload it first to the container before performing file operations.
-When exploring a git repository, rather than cloning it on your own, prefer to use container_upload with a git url.
+If the user requests git interactions, you should inform them that git is not supported within the container environment, but changes will be automatically propogated to their container-use git remote.

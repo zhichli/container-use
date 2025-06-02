@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,6 +67,11 @@ func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
+	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
+	if err != nil {
+		return "", err
+	}
+
 	_, err = runGitCommand(localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
 	if err != nil {
 		return "", err
@@ -98,15 +104,22 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	return cuRepoPath, nil
 }
 
 func runGitCommand(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
-	output, err := cmd.Output()
+
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("git command failed (exit code %d): %w\nOutput: %s",
+				exitErr.ExitCode(), err, string(output))
+		}
+		return "", fmt.Errorf("git command failed: %w", err)
 	}
+
 	return string(output), nil
 }
