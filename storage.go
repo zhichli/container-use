@@ -17,7 +17,7 @@ func saveState(c *Container) error {
 		return err
 	}
 
-	containerDir, err := homedir.Expand(fmt.Sprintf("~/.config/container-use/%s", c.ID))
+	containerDir, err := homedir.Expand(fmt.Sprintf("~/.config/container-use/containers/%s", c.ID))
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func saveState(c *Container) error {
 }
 
 func loadState() (map[string]*Container, error) {
-	stateDir, err := homedir.Expand("~/.config/container-use")
+	stateDir, err := homedir.Expand("~/.config/container-use/containers")
 	if err != nil {
 		return nil, err
 	}
