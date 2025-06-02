@@ -62,9 +62,18 @@ func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
-	_, err = runGitCommand(cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
+	// create worktree, accomodating partial failures where the branch pushed but the worktree wasn't created
+	_, err = runGitCommand(cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
 	if err != nil {
-		return "", err
+		_, err = runGitCommand(cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		_, err = runGitCommand(cuRepoPath, "worktree", "add", worktreePath, c.BranchName())
+		if err != nil {
+			return "", err
+		}
 	}
 
 	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
@@ -72,9 +81,13 @@ func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
-	_, err = runGitCommand(localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
+	// set up remote tracking branch if it's not already there
+	_, err = runGitCommand(localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
 	if err != nil {
-		return "", err
+		_, err = runGitCommand(localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return worktreePath, nil
@@ -100,9 +113,22 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = runGitCommand(localRepoPath, "remote", "add", "container-use", cuRepoPath)
+
+	// set up local remote, updating it if it had been created previously at a different path
+	existingURL, err := runGitCommand(localRepoPath, "remote", "get-url", "container-use")
 	if err != nil {
-		return "", err
+		_, err = runGitCommand(localRepoPath, "remote", "add", "container-use", cuRepoPath)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		existingURL = strings.TrimSpace(existingURL)
+		if existingURL != cuRepoPath {
+			_, err = runGitCommand(localRepoPath, "remote", "set-url", "container-use", cuRepoPath)
+			if err != nil {
+				return "", err
+			}
+		}
 	}
 	return cuRepoPath, nil
 }
