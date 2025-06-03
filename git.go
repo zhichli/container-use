@@ -59,7 +59,6 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
-	// TODO(braa): safely handle uncommitted changes
 	currentBranch, err := runGitCommand(localRepoPath, "branch", "--show-current")
 	if err != nil {
 		return "", err
@@ -73,7 +72,7 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
-	// create worktree, accomodating partial failures where the branch pushed but the worktree wasn't created
+	// create worktree, accomodating past partial failures where the branch pushed but the worktree wasn't created
 	_, err = runGitCommand(cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
 	if err != nil {
 		_, err = runGitCommand(cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
@@ -85,6 +84,10 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+	}
+
+	if err := c.applyUncommittedChanges(localRepoPath, worktreePath); err != nil {
+		return "", fmt.Errorf("failed to apply uncommitted changes: %w", err)
 	}
 
 	_, err = runGitCommand(localRepoPath, "fetch", "container-use", c.BranchName())
@@ -321,6 +324,56 @@ func (s *Environment) shouldSkipFile(fileName string) bool {
 	}
 
 	return false
+}
+
+func (c *Environment) applyUncommittedChanges(localRepoPath, worktreePath string) error {
+	status, err := runGitCommand(localRepoPath, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(status) == "" {
+		return nil
+	}
+
+	slog.Info("Applying uncommitted changes to worktree", "container-id", c.ID, "container-name", c.Name)
+
+	patch, err := runGitCommand(localRepoPath, "diff", "HEAD")
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(patch) != "" {
+		cmd := exec.Command("git", "apply")
+		cmd.Dir = worktreePath
+		cmd.Stdin = strings.NewReader(patch)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to apply patch: %w", err)
+		}
+	}
+
+	untrackedFiles, err := runGitCommand(localRepoPath, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return err
+	}
+
+	for _, file := range strings.Split(strings.TrimSpace(untrackedFiles), "\n") {
+		if file == "" {
+			continue
+		}
+		srcPath := filepath.Join(localRepoPath, file)
+		destPath := filepath.Join(worktreePath, file)
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return err
+		}
+
+		if err := exec.Command("cp", "-r", srcPath, destPath).Run(); err != nil {
+			return fmt.Errorf("failed to copy untracked file %s: %w", file, err)
+		}
+	}
+
+	return c.commitWorktreeChanges(worktreePath, "Copy uncommitted changes", "Applied uncommitted changes from local repository")
 }
 
 func (s *Environment) addFilesFromUntrackedDirectory(worktreePath, dirName string) error {
