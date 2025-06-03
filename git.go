@@ -15,6 +15,9 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
+// 10MB
+const maxFileSizeForTextCheck = 10 * 1024 * 1024
+
 func getRepoPath(repoName string) (string, error) {
 	return homedir.Expand(fmt.Sprintf(
 		"~/.config/container-use/repos/%s",
@@ -174,10 +177,12 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return err
 	}
 
+	slog.Info("Saving environment")
 	if err := env.save(worktreePath); err != nil {
 		return err
 	}
 
+	slog.Info("Committing changes to worktree")
 	if err := env.commitWorktreeChanges(worktreePath, name, explanation); err != nil {
 		return fmt.Errorf("failed to commit worktree changes: %w", err)
 	}
@@ -187,7 +192,8 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return err
 	}
 
-	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
+	slog.Info("Fetching container-use remote in source repository")
+	_, err = runGitCommand(localRepoPath, "fetch", "container-use", env.BranchName())
 	return err
 }
 
@@ -220,6 +226,7 @@ func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 	}
 
 	lines := strings.Split(strings.TrimSpace(statusOutput), "\n")
+
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -228,6 +235,8 @@ func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 			continue
 		}
 
+		indexStatus := line[0]
+		workTreeStatus := line[1]
 		fileName := strings.TrimSpace(line[2:])
 		if fileName == "" {
 			continue
@@ -237,13 +246,44 @@ func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 			continue
 		}
 
-		if !s.isBinaryFile(worktreePath, fileName) {
+		switch {
+		case indexStatus == '?' && workTreeStatus == '?':
+			// ?? = untracked files or directories
+			if strings.HasSuffix(fileName, "/") {
+				// Untracked directory - traverse and add non-binary files
+				dirName := strings.TrimSuffix(fileName, "/")
+				if err := s.addFilesFromUntrackedDirectory(worktreePath, dirName); err != nil {
+					return err
+				}
+			} else {
+				// Untracked file - add if not binary
+				if !s.isBinaryFile(worktreePath, fileName) {
+					_, err = runGitCommand(worktreePath, "add", fileName)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		case indexStatus == 'A':
+			// A = already staged, skip
+			continue
+		case indexStatus == 'D' || workTreeStatus == 'D':
+			// D = deleted files (always stage deletion)
 			_, err = runGitCommand(worktreePath, "add", fileName)
 			if err != nil {
 				return err
 			}
+		default:
+			// M, R, C and other statuses - add if not binary
+			if !s.isBinaryFile(worktreePath, fileName) {
+				_, err = runGitCommand(worktreePath, "add", fileName)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -267,6 +307,8 @@ func (s *Environment) shouldSkipFile(fileName string) bool {
 
 	skipPatterns := []string{
 		"node_modules/", ".git/", "__pycache__/", ".DS_Store",
+		"venv/", ".venv/", "env/", ".env/",
+		"target/", "build/", "dist/", ".next/",
 		"*.tmp", "*.temp", "*.cache", "*.log",
 	}
 
@@ -279,8 +321,56 @@ func (s *Environment) shouldSkipFile(fileName string) bool {
 	return false
 }
 
+func (s *Environment) addFilesFromUntrackedDirectory(worktreePath, dirName string) error {
+	dirPath := filepath.Join(worktreePath, dirName)
+
+	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		relPath, err := filepath.Rel(worktreePath, path)
+		if err != nil {
+			return err
+		}
+		
+		if info.IsDir() {
+			if s.shouldSkipFile(relPath + "/") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		
+		if s.shouldSkipFile(relPath) {
+			return nil
+		}
+		
+		if !s.isBinaryFile(worktreePath, relPath) {
+			_, err = runGitCommand(worktreePath, "add", relPath)
+			if err != nil {
+				return err
+			}
+		}
+		
+		return nil
+	})
+}
+
 func (s *Environment) isBinaryFile(worktreePath, fileName string) bool {
 	fullPath := filepath.Join(worktreePath, fileName)
+
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return true
+	}
+
+	if stat.IsDir() {
+		return false
+	}
+
+	if stat.Size() > maxFileSizeForTextCheck {
+		return true
+	}
 
 	file, err := os.Open(fullPath)
 	if err != nil {
@@ -288,15 +378,6 @@ func (s *Environment) isBinaryFile(worktreePath, fileName string) bool {
 		return true
 	}
 	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		return true
-	}
-
-	if stat.Size() > 10*1024*1024 {
-		return true
-	}
 
 	buffer := make([]byte, 8000)
 	n, err := file.Read(buffer)
