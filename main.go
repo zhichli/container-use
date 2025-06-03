@@ -27,12 +27,6 @@ func main() {
 	}
 	defer dag.Close()
 
-	slog.Info("loading container state")
-	if err := LoadContainers(); err != nil {
-		slog.Error("Error loading containers", "error", err)
-		os.Exit(1)
-	}
-
 	s := server.NewMCPServer(
 		"Dagger",
 		"1.0.0",

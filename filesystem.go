@@ -10,8 +10,8 @@ import (
 	"dagger.io/dagger"
 )
 
-func (s *Container) FileRead(ctx context.Context, targetFile string, shouldReadEntireFile bool, startLineOneIndexed int, endLineOneIndexedInclusive int) (string, error) {
-	file, err := s.state.File(targetFile).Contents(ctx)
+func (s *Environment) FileRead(ctx context.Context, targetFile string, shouldReadEntireFile bool, startLineOneIndexed int, endLineOneIndexedInclusive int) (string, error) {
+	file, err := s.container.File(targetFile).Contents(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -35,8 +35,8 @@ func (s *Container) FileRead(ctx context.Context, targetFile string, shouldReadE
 	return strings.Join(lines[start:end], "\n"), nil
 }
 
-func (s *Container) FileWrite(ctx context.Context, explanation, targetFile, contents string) error {
-	err := s.apply(ctx, "Write "+targetFile, explanation, s.state.WithNewFile(targetFile, contents))
+func (s *Environment) FileWrite(ctx context.Context, explanation, targetFile, contents string) error {
+	err := s.apply(ctx, "Write "+targetFile, explanation, "", s.container.WithNewFile(targetFile, contents))
 	if err != nil {
 		return fmt.Errorf("failed applying file write, skipping git propogation: %w", err)
 	}
@@ -44,8 +44,8 @@ func (s *Container) FileWrite(ctx context.Context, explanation, targetFile, cont
 	return s.propagateToWorktree(ctx, "Write "+targetFile, explanation)
 }
 
-func (s *Container) FileDelete(ctx context.Context, explanation, targetFile string) error {
-	err := s.apply(ctx, "Delete "+targetFile, explanation, s.state.WithoutFile(targetFile))
+func (s *Environment) FileDelete(ctx context.Context, explanation, targetFile string) error {
+	err := s.apply(ctx, "Delete "+targetFile, explanation, "", s.container.WithoutFile(targetFile))
 	if err != nil {
 		return err
 	}
@@ -53,8 +53,8 @@ func (s *Container) FileDelete(ctx context.Context, explanation, targetFile stri
 	return s.propagateToWorktree(ctx, "Delete "+targetFile, explanation)
 }
 
-func (s *Container) FileList(ctx context.Context, path string) (string, error) {
-	entries, err := s.state.Directory(path).Entries(ctx)
+func (s *Environment) FileList(ctx context.Context, path string) (string, error) {
+	entries, err := s.container.Directory(path).Entries(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -78,8 +78,8 @@ func urlToDirectory(url string) *dagger.Directory {
 	}
 }
 
-func (s *Container) Upload(ctx context.Context, explanation, source string, target string) error {
-	err := s.apply(ctx, "Upload "+source+" to "+target, explanation, s.state.WithDirectory(target, urlToDirectory(source)))
+func (s *Environment) Upload(ctx context.Context, explanation, source string, target string) error {
+	err := s.apply(ctx, "Upload "+source+" to "+target, explanation, "", s.container.WithDirectory(target, urlToDirectory(source)))
 	if err != nil {
 		return err
 	}
@@ -87,10 +87,10 @@ func (s *Container) Upload(ctx context.Context, explanation, source string, targ
 	return s.propagateToWorktree(ctx, "Upload "+source+" to "+target, explanation)
 }
 
-func (s *Container) Download(ctx context.Context, source string, target string) error {
-	if _, err := s.state.Directory(source).Export(ctx, target); err != nil {
+func (s *Environment) Download(ctx context.Context, source string, target string) error {
+	if _, err := s.container.Directory(source).Export(ctx, target); err != nil {
 		if strings.Contains(err.Error(), "not a directory") {
-			if _, err := s.state.File(source).Export(ctx, target); err != nil {
+			if _, err := s.container.File(source).Export(ctx, target); err != nil {
 				return err
 			}
 			return nil
@@ -101,9 +101,9 @@ func (s *Container) Download(ctx context.Context, source string, target string) 
 	return nil
 }
 
-func (s *Container) RemoteDiff(ctx context.Context, source string, target string) (string, error) {
+func (s *Environment) RemoteDiff(ctx context.Context, source string, target string) (string, error) {
 	sourceDir := urlToDirectory(source)
-	targetDir := s.state.Directory(target)
+	targetDir := s.container.Directory(target)
 
 	diff, err := dag.Container().From(AlpineImage).
 		WithMountedDirectory("/source", sourceDir).
@@ -121,7 +121,7 @@ func (s *Container) RemoteDiff(ctx context.Context, source string, target string
 	}
 	return diff, nil
 }
-func (s *Container) RevisionDiff(ctx context.Context, path string, fromVersion, toVersion Version) (string, error) {
+func (s *Environment) RevisionDiff(ctx context.Context, path string, fromVersion, toVersion Version) (string, error) {
 	revisionDiff, err := s.revisionDiff(ctx, path, fromVersion, toVersion, true)
 	if err != nil {
 		if strings.Contains(err.Error(), "not a directory") {
@@ -132,7 +132,7 @@ func (s *Container) RevisionDiff(ctx context.Context, path string, fromVersion, 
 	return revisionDiff, nil
 }
 
-func (s *Container) revisionDiff(ctx context.Context, path string, fromVersion, toVersion Version, directory bool) (string, error) {
+func (s *Environment) revisionDiff(ctx context.Context, path string, fromVersion, toVersion Version, directory bool) (string, error) {
 	if path == "" {
 		path = s.Workdir
 	}
@@ -143,18 +143,18 @@ func (s *Container) revisionDiff(ctx context.Context, path string, fromVersion, 
 		diffCtr = diffCtr.
 			WithMountedDirectory(
 				filepath.Join("versions", fmt.Sprintf("%d", fromVersion)),
-				s.History.Get(fromVersion).state.Directory(path)).
+				s.History.Get(fromVersion).container.Directory(path)).
 			WithMountedDirectory(
 				filepath.Join("versions", fmt.Sprintf("%d", toVersion)),
-				s.History.Get(toVersion).state.Directory(path))
+				s.History.Get(toVersion).container.Directory(path))
 	} else {
 		diffCtr = diffCtr.
 			WithMountedFile(
 				filepath.Join("versions", fmt.Sprintf("%d", fromVersion)),
-				s.History.Get(fromVersion).state.File(path)).
+				s.History.Get(fromVersion).container.File(path)).
 			WithMountedFile(
 				filepath.Join("versions", fmt.Sprintf("%d", toVersion)),
-				s.History.Get(toVersion).state.File(path))
+				s.History.Get(toVersion).container.File(path))
 	}
 
 	diffCmd := []string{"diff", "-burN",

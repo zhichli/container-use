@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,15 +24,15 @@ func getRepoPath(repoName string) (string, error) {
 	))
 }
 
-func (c *Container) BranchName() string {
+func (c *Environment) BranchName() string {
 	return fmt.Sprintf("%s-%s", c.Name, c.ID[:8])
 }
 
-func (c *Container) GetWorktreePath() (string, error) {
+func (c *Environment) GetWorktreePath() (string, error) {
 	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", c.BranchName()))
 }
 
-func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
+func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 	localRepoPath, err := filepath.Abs(localRepoPath)
 	if err != nil {
 		return "", err
@@ -141,6 +143,8 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 }
 
 func runGitCommand(dir string, args ...string) (string, error) {
+	slog.Info(fmt.Sprintf("[%s] $ git %s", dir, strings.Join(args, " ")))
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 
@@ -157,13 +161,13 @@ func runGitCommand(dir string, args ...string) (string, error) {
 	return string(output), nil
 }
 
-func (s *Container) propagateToWorktree(ctx context.Context, name, explanation string) error {
-	worktreePath, err := s.GetWorktreePath()
+func (env *Environment) propagateToWorktree(ctx context.Context, name, explanation string) error {
+	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.state.Directory(s.Workdir).Export(
+	_, err = env.container.Directory(env.Workdir).Export(
 		ctx,
 		worktreePath,
 		dagger.DirectoryExportOpts{Wipe: true},
@@ -172,12 +176,20 @@ func (s *Container) propagateToWorktree(ctx context.Context, name, explanation s
 		return err
 	}
 
-	if err := s.commitWorktreeChanges(worktreePath, name, explanation); err != nil {
+	// FIXME(aluzzardi): hackish, but it works
+	envState, err := json.MarshalIndent(env, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path.Join(worktreePath, environmentFile), envState, 0644); err != nil {
+		return err
+	}
+
+	if err := env.commitWorktreeChanges(worktreePath, name, explanation); err != nil {
 		return fmt.Errorf("failed to commit worktree changes: %w", err)
 	}
 
-	// TODO(braa): "." is a hack here, means we can only work on the repo where we started the server
-	localRepoPath, err := filepath.Abs(".")
+	localRepoPath, err := filepath.Abs(env.Source)
 	if err != nil {
 		return err
 	}
@@ -186,7 +198,7 @@ func (s *Container) propagateToWorktree(ctx context.Context, name, explanation s
 	return err
 }
 
-func (s *Container) commitWorktreeChanges(worktreePath, name, explanation string) error {
+func (s *Environment) commitWorktreeChanges(worktreePath, name, explanation string) error {
 	status, err := runGitCommand(worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
@@ -208,7 +220,7 @@ func (s *Container) commitWorktreeChanges(worktreePath, name, explanation string
 // AI slop below!
 // this is just to keep us moving fast because big git repos get hard to work with
 // and our demos like to download large dependencies.
-func (s *Container) addNonBinaryFiles(worktreePath string) error {
+func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 	statusOutput, err := runGitCommand(worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
@@ -242,7 +254,7 @@ func (s *Container) addNonBinaryFiles(worktreePath string) error {
 	return nil
 }
 
-func (s *Container) shouldSkipFile(fileName string) bool {
+func (s *Environment) shouldSkipFile(fileName string) bool {
 	skipExtensions := []string{
 		".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
 		".zip", ".rar", ".7z", ".gz", ".bz2", ".xz",
@@ -274,7 +286,7 @@ func (s *Container) shouldSkipFile(fileName string) bool {
 	return false
 }
 
-func (s *Container) isBinaryFile(worktreePath, fileName string) bool {
+func (s *Environment) isBinaryFile(worktreePath, fileName string) bool {
 	fullPath := filepath.Join(worktreePath, fileName)
 
 	file, err := os.Open(fullPath)
