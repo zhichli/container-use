@@ -150,6 +150,7 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 
 func runGitCommand(dir string, args ...string) (string, error) {
 	slog.Info(fmt.Sprintf("[%s] $ git %s", dir, strings.Join(args, " ")))
+	defer slog.Info(fmt.Sprintf("[%s] $ git %s (DONE)", dir, strings.Join(args, " ")))
 
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
@@ -168,6 +169,9 @@ func runGitCommand(dir string, args ...string) (string, error) {
 }
 
 func (env *Environment) propagateToWorktree(ctx context.Context, name, explanation string) error {
+	slog.Info("Propagating to worktree...", "environment.id", env.ID, "environment.name", env.Name, "branchName", env.BranchName())
+	defer slog.Info("Propagating to worktree... (DONE)", "environment.id", env.ID, "environment.name", env.Name, "branchName", env.BranchName())
+
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
 		return err
