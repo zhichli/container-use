@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -18,7 +19,20 @@ type Tool struct {
 var tools = []*Tool{}
 
 func RegisterTool(tool ...*Tool) {
-	tools = append(tools, tool...)
+	for _, t := range tool {
+		tools = append(tools, wrapTool(t))
+	}
+}
+
+func wrapTool(t *Tool) *Tool {
+	return &Tool{
+		Definition: t.Definition,
+		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			slog.Info("Calling tool", "tool", t.Definition.Name)
+			defer slog.Info("Tool call completed", "tool", t.Definition.Name)
+			return t.Handler(ctx, request)
+		},
+	}
 }
 
 func init() {
