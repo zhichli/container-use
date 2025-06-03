@@ -85,7 +85,6 @@ func CreateContainer(name, explanation, image, workdir string) (*Container, erro
 		Workdir: workdir,
 	}
 
-	slog.Info("Creating container", "id", container.ID, "name", container.Name, "image", container.Image, "workdir", container.Workdir)
 	worktreePath, err := container.InitializeWorktree(".")
 	if err != nil {
 		return nil, fmt.Errorf("failed intializing worktree: %w", err)
@@ -93,6 +92,7 @@ func CreateContainer(name, explanation, image, workdir string) (*Container, erro
 
 	hostDir := dag.Host().Directory(worktreePath)
 
+	slog.Info("Creating container", "id", container.ID, "name", container.Name, "image", container.Image, "workdir", container.Workdir)
 	err = container.apply(
 		context.Background(),
 		"Create container from "+image,
@@ -297,5 +297,3 @@ func (s *Container) Fork(ctx context.Context, explanation, name string, version 
 	containers[forkedContainer.ID] = forkedContainer
 	return forkedContainer, nil
 }
-
-

@@ -76,7 +76,19 @@ var ContainerCreateTool = &Tool{
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to create container", err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf(`{"id": %q}`, sandbox.ID)), nil
+		worktreePath, err := sandbox.GetWorktreePath()
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to get worktree path", err), nil
+		}
+
+		return mcp.NewToolResultText(fmt.Sprintf(
+			`{"id": %q, "branch": %q, "tracking branch": %q, "checkout command for human": "git checkout %q", "host worktree path": %q}`,
+			sandbox.ID,
+			sandbox.BranchName(),
+			fmt.Sprintf("container-use/%s", sandbox.BranchName()),
+			sandbox.BranchName(),
+			worktreePath,
+		)), nil
 	},
 }
 
@@ -272,14 +284,14 @@ var ContainerRunCmdTool = &Tool{
 				return nil, err
 			}
 
-			return mcp.NewToolResultText(fmt.Sprintf("Command started in the background. Endpoints are %s", string(out))), nil
+			return mcp.NewToolResultText(fmt.Sprintf("Command started in the background. Endpoints are %s\n\nAny changes to the container workdir (%s) WILL NOT be committed to container-use/%s", string(out), container.Workdir, container.BranchName())), nil
 		}
 
 		stdout, err := container.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
-		return mcp.NewToolResultText(stdout), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%s\n\nAny changes to the container workdir (%s) have been committed and pushed to container-use/%s", stdout, container.Workdir, container.BranchName())), nil
 	},
 }
 
@@ -318,6 +330,7 @@ var ContainerSetEnvTool = &Tool{
 	},
 }
 
+// unused, unwired
 var ContainerUploadTool = &Tool{
 	Definition: mcp.NewTool("container_upload",
 		mcp.WithDescription("Upload files to a container."),
@@ -364,6 +377,7 @@ var ContainerUploadTool = &Tool{
 	},
 }
 
+// unused, unwired
 var ContainerDownloadTool = &Tool{
 	Definition: mcp.NewTool("container_download",
 		mcp.WithDescription("Download files from a container to the local filesystem."),
@@ -589,7 +603,7 @@ var ContainerFileWriteTool = &Tool{
 			return mcp.NewToolResultErrorFromErr("failed to write file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully", targetFile)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully, changes pushed to container-use/%s", targetFile, container.BranchName())), nil
 	},
 }
 
@@ -627,7 +641,7 @@ var ContainerFileDeleteTool = &Tool{
 			return mcp.NewToolResultErrorFromErr("failed to delete file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully", targetFile)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully, changes pushed to container-use/%s", targetFile, container.BranchName())), nil
 	},
 }
 

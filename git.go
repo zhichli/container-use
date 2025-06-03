@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,6 +50,7 @@ func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
 		return worktreePath, nil
 	}
 
+	slog.Info("Initializing worktree", "container-id", c.ID, "container-name", c.Name, "branchName", c.BranchName())
 	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
 	if err != nil {
 		return "", err
@@ -113,6 +115,7 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 		return cuRepoPath, nil
 	}
 
+	slog.Info("Initializing local remote", "local-repo-path", localRepoPath, "container-use-repo-path", cuRepoPath)
 	_, err = runGitCommand(localRepoPath, "clone", "--bare", localRepoPath, cuRepoPath)
 	if err != nil {
 		return "", err

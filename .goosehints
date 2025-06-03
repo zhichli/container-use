@@ -6,3 +6,6 @@ If the user requests git interactions, you MUST inform them that git is not supp
 You must NEVER install the git CLI.
 Running "rm .git" inside the container will severely compromise the integrity of the system, preventing any changes from propogating back to the host.
 Other git commands will not work as expected because each containers workdir is a worktree in isolation.
+
+at the end of a request, you MUST inform the user how to view their changes from the container-use git remote.
+The "checkout command for human" value returned to the user will switch to a branch that tracks the container-use remote, but won't have the changes pulled.
