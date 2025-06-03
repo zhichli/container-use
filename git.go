@@ -284,6 +284,7 @@ func (s *Environment) isBinaryFile(worktreePath, fileName string) bool {
 
 	file, err := os.Open(fullPath)
 	if err != nil {
+		slog.Error("Error opening file", "err", err)
 		return true
 	}
 	defer file.Close()

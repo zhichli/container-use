@@ -19,9 +19,12 @@ import (
 )
 
 const (
-	defaultImage    = "ubuntu:24.04"
-	alpineImage     = "alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c"
-	environmentFile = "container-use.json"
+	defaultImage     = "ubuntu:24.04"
+	alpineImage      = "alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c"
+	configDir        = "." // FIXME(aluzzardi): should be .container-use
+	instructionsFile = "AGENT.md"
+	environmentFile  = "container-use.json"
+	lockFile         = "lock"
 )
 
 type Version int
@@ -64,14 +67,16 @@ func (h History) Get(version Version) *Revision {
 }
 
 type Environment struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Source       string `json:"-"`
-	Worktree     string `json:"-"`
-	Dockerfile   string `json:"dockerfile"`
-	Instructions string `json:"instructions"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Source   string `json:"-"`
+	Worktree string `json:"-"`
 
-	Workdir string  `json:"workdir"`
+	Instructions  string   `json:"-"`
+	Workdir       string   `json:"workdir"`
+	BaseImage     string   `json:"base_image"`
+	SetupCommands []string `json:"setup_commands"`
+
 	History History `json:"history"`
 
 	mu        sync.Mutex
@@ -79,13 +84,21 @@ type Environment struct {
 }
 
 func (env *Environment) save(baseDir string) error {
-	// FIXME(aluzzardi): hackish, but it works
+	cfg := path.Join(baseDir, configDir)
+	if err := os.MkdirAll(cfg, 0755); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(path.Join(cfg, instructionsFile), []byte(env.Instructions), 0644); err != nil {
+		return err
+	}
+
 	envState, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(path.Join(baseDir, environmentFile), envState, 0644); err != nil {
+	if err := os.WriteFile(path.Join(cfg, environmentFile), envState, 0644); err != nil {
 		return err
 	}
 
@@ -93,7 +106,15 @@ func (env *Environment) save(baseDir string) error {
 }
 
 func (env *Environment) load(baseDir string) error {
-	envState, err := os.ReadFile(path.Join(baseDir, environmentFile))
+	cfg := path.Join(baseDir, configDir)
+
+	instructions, err := os.ReadFile(path.Join(cfg, instructionsFile))
+	if err != nil {
+		return err
+	}
+	env.Instructions = string(instructions)
+
+	envState, err := os.ReadFile(path.Join(cfg, environmentFile))
 	if err != nil {
 		return err
 	}
@@ -106,6 +127,13 @@ func (env *Environment) load(baseDir string) error {
 	env.container = env.History.Latest().container
 
 	return nil
+}
+
+func (env *Environment) isLocked(baseDir string) bool {
+	if _, err := os.Stat(path.Join(baseDir, configDir, lockFile)); err == nil {
+		return true
+	}
+	return false
 }
 
 func (e *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
@@ -141,7 +169,7 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 		ID:           uuid.New().String(),
 		Name:         name,
 		Source:       source,
-		Dockerfile:   fmt.Sprintf("FROM %s", defaultImage),
+		BaseImage:    defaultImage,
 		Instructions: "No instructions found. Please look around the filesystem and update me",
 		Workdir:      "/workdir",
 	}
@@ -195,18 +223,37 @@ func OpenEnvironment(ctx context.Context, explanation, source, name string) (*En
 func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error) {
 	sourceDir := dag.Host().Directory(env.Worktree)
 
-	return dag.
-		Directory().
-		WithNewFile("Dockerfile", env.Dockerfile).
-		DockerBuild().
-		WithWorkdir(env.Workdir).
-		WithDirectory(".", sourceDir).
-		Sync(ctx)
+	container := dag.
+		Container().
+		From(env.BaseImage).
+		WithWorkdir(env.Workdir)
+
+	for _, command := range env.SetupCommands {
+		container = container.WithExec([]string{"sh", "-c", command})
+	}
+
+	container = container.WithDirectory(".", sourceDir)
+
+	container, err := container.Sync(ctx)
+	if err != nil {
+		var exitErr *dagger.ExecError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("build failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr)
+		}
+		return nil, err
+	}
+
+	return container, nil
 }
 
-func (env *Environment) Update(ctx context.Context, explanation, dockerfile, instructions string) error {
-	env.Dockerfile = dockerfile
+func (env *Environment) Update(ctx context.Context, explanation, instructions, baseImage string, setupCommands []string) error {
+	if env.isLocked(env.Source) {
+		return fmt.Errorf("Environment is locked, no updates allowed. Try to make do with the current environment or ask a human to remove the lock file (%s)", path.Join(env.Source, configDir, lockFile))
+	}
+
 	env.Instructions = instructions
+	env.BaseImage = baseImage
+	env.SetupCommands = setupCommands
 
 	container, err := env.buildBase(ctx)
 	if err != nil {

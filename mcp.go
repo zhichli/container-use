@@ -47,14 +47,15 @@ func init() {
 }
 
 type EnvironmentResponse struct {
-	ID               string `json:"id"`
-	Dockerfile       string `json:"dockerfile"`
-	Instructions     string `json:"instructions"`
-	Workdir          string `json:"workdir"`
-	Branch           string `json:"branch"`
-	TrackingBranch   string `json:"tracking_branch"`
-	CheckoutCommand  string `json:"checkout_command_for_human"`
-	HostWorktreePath string `json:"host_worktree_path"`
+	ID               string   `json:"id"`
+	BaseImage        string   `json:"base_image"`
+	SetupCommands    []string `json:"setup_commands"`
+	Instructions     string   `json:"instructions"`
+	Workdir          string   `json:"workdir"`
+	Branch           string   `json:"branch"`
+	TrackingBranch   string   `json:"tracking_branch"`
+	CheckoutCommand  string   `json:"checkout_command_for_human"`
+	HostWorktreePath string   `json:"host_worktree_path"`
 }
 
 func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
@@ -64,8 +65,9 @@ func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
 	}
 	resp := &EnvironmentResponse{
 		ID:               env.ID,
-		Dockerfile:       env.Dockerfile,
 		Instructions:     env.Instructions,
+		BaseImage:        env.BaseImage,
+		SetupCommands:    env.SetupCommands,
 		Workdir:          env.Workdir,
 		Branch:           env.BranchName(),
 		TrackingBranch:   fmt.Sprintf("container-use/%s", env.BranchName()),
@@ -81,7 +83,7 @@ func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
 
 var EnvironmentOpenTool = &Tool{
 	Definition: mcp.NewTool("environment_open",
-		mcp.WithDescription(`Opens (or creates) a development environment. The environment is the result of a build of the Dockerfile specification. Read carefully the instructions to understand the environment. DO NOT manually install toolchains inside the environment, instead explicitly call environment_update"`),
+		mcp.WithDescription(`Opens (or creates) a development environment. The environment is the result of a the setups commands on top of the base image. Read carefully the instructions to understand the environment. DO NOT manually install toolchains inside the environment, instead explicitly call environment_update"`),
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this environment is being opened or created."),
 		),
@@ -125,9 +127,15 @@ var EnvironmentUpdateTool = &Tool{
 			mcp.Description("The instructions for the environment. This should contain any information that might be useful to operate in the environment, such as what tools are available, what commands to use to build/test/etc"),
 			mcp.Required(),
 		),
-		mcp.WithString("dockerfile",
-			mcp.Description("Dockerfile used to build the environment. Please update this with anything that might be useful to operate in the environment"),
+
+		mcp.WithString("base_image",
+			mcp.Description("Change the base image for the environment."),
 			mcp.Required(),
+		),
+		mcp.WithArray("setup_commands",
+			mcp.Description("Commands that will be executed on top of the base image to set up the environment. Similar to `RUN` instructions in Dockerfiles."),
+			mcp.Required(),
+			mcp.Items(map[string]any{"type": "string"}),
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -143,11 +151,16 @@ var EnvironmentUpdateTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		dockerfile, err := request.RequireString("dockerfile")
+		baseImage, err := request.RequireString("base_image")
 		if err != nil {
 			return nil, err
 		}
-		if err := environment.Update(ctx, request.GetString("explanation", ""), dockerfile, instructions); err != nil {
+		setupCommands, err := request.RequireStringSlice("setup_commands")
+		if err != nil {
+			return nil, err
+		}
+
+		if err := environment.Update(ctx, request.GetString("explanation", ""), instructions, baseImage, setupCommands); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to update environment", err), nil
 		}
 		return EnvironmentToCallResult(environment)
