@@ -32,8 +32,6 @@ func init() {
 		ContainerRunCmdTool,
 		ContainerSetEnvTool,
 
-		ContainerUploadTool,
-		ContainerDownloadTool,
 		ContainerDiffTool,
 
 		ContainerFileReadTool,

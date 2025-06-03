@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"dagger.io/dagger"
 	"github.com/mitchellh/go-homedir"
 )
 
@@ -51,6 +54,7 @@ func (c *Container) InitializeWorktree(localRepoPath string) (string, error) {
 		return "", err
 	}
 
+	// TODO(braa): safely handle uncommitted changes
 	currentBranch, err := runGitCommand(localRepoPath, "branch", "--show-current")
 	if err != nil {
 		return "", err
@@ -148,4 +152,153 @@ func runGitCommand(dir string, args ...string) (string, error) {
 	}
 
 	return string(output), nil
+}
+
+func (s *Container) propagateToWorktree(ctx context.Context, name, explanation string) error {
+	worktreePath, err := s.GetWorktreePath()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.state.Directory(s.Workdir).Export(
+		ctx,
+		worktreePath,
+		dagger.DirectoryExportOpts{Wipe: true},
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := s.commitWorktreeChanges(worktreePath, name, explanation); err != nil {
+		return fmt.Errorf("failed to commit worktree changes: %w", err)
+	}
+
+	// TODO(braa): "." is a hack here, means we can only work on the repo where we started the server
+	localRepoPath, err := filepath.Abs(".")
+	if err != nil {
+		return err
+	}
+
+	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
+	return err
+}
+
+func (s *Container) commitWorktreeChanges(worktreePath, name, explanation string) error {
+	status, err := runGitCommand(worktreePath, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(status) == "" {
+		return nil
+	}
+
+	if err := s.addNonBinaryFiles(worktreePath); err != nil {
+		return err
+	}
+
+	commitMsg := fmt.Sprintf("%s\n\n%s", name, explanation)
+	_, err = runGitCommand(worktreePath, "commit", "-m", commitMsg)
+	return err
+}
+
+// AI slop below!
+// this is just to keep us moving fast because big git repos get hard to work with
+// and our demos like to download large dependencies.
+func (s *Container) addNonBinaryFiles(worktreePath string) error {
+	statusOutput, err := runGitCommand(worktreePath, "status", "--porcelain")
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(strings.TrimSpace(statusOutput), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		if len(line) < 3 {
+			continue
+		}
+
+		fileName := strings.TrimSpace(line[2:])
+		if fileName == "" {
+			continue
+		}
+
+		if s.shouldSkipFile(fileName) {
+			continue
+		}
+
+		if !s.isBinaryFile(worktreePath, fileName) {
+			_, err = runGitCommand(worktreePath, "add", fileName)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Container) shouldSkipFile(fileName string) bool {
+	skipExtensions := []string{
+		".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
+		".zip", ".rar", ".7z", ".gz", ".bz2", ".xz",
+		".exe", ".bin", ".dmg", ".pkg", ".msi",
+		".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".svg",
+		".mp3", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv",
+		".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+		".so", ".dylib", ".dll", ".a", ".lib",
+	}
+
+	lowerName := strings.ToLower(fileName)
+	for _, ext := range skipExtensions {
+		if strings.HasSuffix(lowerName, ext) {
+			return true
+		}
+	}
+
+	skipPatterns := []string{
+		"node_modules/", ".git/", "__pycache__/", ".DS_Store",
+		"*.tmp", "*.temp", "*.cache", "*.log",
+	}
+
+	for _, pattern := range skipPatterns {
+		if strings.Contains(lowerName, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Container) isBinaryFile(worktreePath, fileName string) bool {
+	fullPath := filepath.Join(worktreePath, fileName)
+
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return true
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return true
+	}
+
+	if stat.Size() > 10*1024*1024 {
+		return true
+	}
+
+	buffer := make([]byte, 8000)
+	n, err := file.Read(buffer)
+	if err != nil && n == 0 {
+		return true
+	}
+
+	buffer = buffer[:n]
+	if slices.Contains(buffer, 0) {
+		return true
+	}
+
+	return false
 }

@@ -93,11 +93,15 @@ func CreateContainer(name, explanation, image, workdir string) (*Container, erro
 
 	hostDir := dag.Host().Directory(worktreePath)
 
-	err = container.apply(context.Background(), "Create container from "+image, explanation, dag.Container().
-		From(image).
-		WithDirectory(workdir, hostDir).
-		WithWorkdir(workdir).
-		WithDirectory(".", dag.Directory())) // Force workdir to exist
+	err = container.apply(
+		context.Background(),
+		"Create container from "+image,
+		explanation,
+		dag.Container().
+			From(image).
+			WithDirectory(workdir, hostDir).
+			WithWorkdir(workdir),
+	)
 
 	if err != nil {
 		return nil, err
@@ -164,6 +168,10 @@ func (s *Container) Run(ctx context.Context, explanation, command, shell string,
 	}
 	if err := s.apply(ctx, "Run "+command, explanation, newState); err != nil {
 		return "", err
+	}
+
+	if err := s.propagateToWorktree(ctx, "Run "+command, explanation); err != nil {
+		return "", fmt.Errorf("failed to propagate to worktree: %w", err)
 	}
 
 	return stdout, nil
@@ -266,7 +274,7 @@ func (s *Container) Revert(ctx context.Context, explanation string, version Vers
 	if err := s.apply(ctx, "Revert to "+revision.Name, explanation, revision.state); err != nil {
 		return err
 	}
-	return nil
+	return s.propagateToWorktree(ctx, "Revert to "+revision.Name, explanation)
 }
 
 func (s *Container) Fork(ctx context.Context, explanation, name string, version *Version) (*Container, error) {
@@ -289,3 +297,5 @@ func (s *Container) Fork(ctx context.Context, explanation, name string, version 
 	containers[forkedContainer.ID] = forkedContainer
 	return forkedContainer, nil
 }
+
+

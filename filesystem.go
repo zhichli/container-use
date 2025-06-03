@@ -21,9 +21,7 @@ func (s *Container) FileRead(ctx context.Context, targetFile string, shouldReadE
 
 	lines := strings.Split(string(file), "\n")
 	start := startLineOneIndexed - 1
-	if start < 0 {
-		start = 0
-	}
+	start = max(start, 0)
 	if start >= len(lines) {
 		start = len(lines) - 1
 	}
@@ -38,11 +36,21 @@ func (s *Container) FileRead(ctx context.Context, targetFile string, shouldReadE
 }
 
 func (s *Container) FileWrite(ctx context.Context, explanation, targetFile, contents string) error {
-	return s.apply(ctx, "Write "+targetFile, explanation, s.state.WithNewFile(targetFile, contents))
+	err := s.apply(ctx, "Write "+targetFile, explanation, s.state.WithNewFile(targetFile, contents))
+	if err != nil {
+		return fmt.Errorf("failed applying file write, skipping git propogation: %w", err)
+	}
+
+	return s.propagateToWorktree(ctx, "Write "+targetFile, explanation)
 }
 
 func (s *Container) FileDelete(ctx context.Context, explanation, targetFile string) error {
-	return s.apply(ctx, "Delete "+targetFile, explanation, s.state.WithoutFile(targetFile))
+	err := s.apply(ctx, "Delete "+targetFile, explanation, s.state.WithoutFile(targetFile))
+	if err != nil {
+		return err
+	}
+
+	return s.propagateToWorktree(ctx, "Delete "+targetFile, explanation)
 }
 
 func (s *Container) FileList(ctx context.Context, path string) (string, error) {
@@ -71,7 +79,12 @@ func urlToDirectory(url string) *dagger.Directory {
 }
 
 func (s *Container) Upload(ctx context.Context, explanation, source string, target string) error {
-	return s.apply(ctx, "Upload "+source+" to "+target, explanation, s.state.WithDirectory(target, urlToDirectory(source)))
+	err := s.apply(ctx, "Upload "+source+" to "+target, explanation, s.state.WithDirectory(target, urlToDirectory(source)))
+	if err != nil {
+		return err
+	}
+
+	return s.propagateToWorktree(ctx, "Upload "+source+" to "+target, explanation)
 }
 
 func (s *Container) Download(ctx context.Context, source string, target string) error {
@@ -108,7 +121,6 @@ func (s *Container) RemoteDiff(ctx context.Context, source string, target string
 	}
 	return diff, nil
 }
-
 func (s *Container) RevisionDiff(ctx context.Context, path string, fromVersion, toVersion Version) (string, error) {
 	revisionDiff, err := s.revisionDiff(ctx, path, fromVersion, toVersion, true)
 	if err != nil {
