@@ -58,7 +58,7 @@ type EnvironmentResponse struct {
 	HostWorktreePath string `json:"host_worktree_path"`
 }
 
-func EnvironmentResponseFromEnvironment(env *Environment) (*mcp.CallToolResult, error) {
+func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ var EnvironmentOpenTool = &Tool{
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to open environment", err), nil
 		}
-		return EnvironmentResponseFromEnvironment(env)
+		return EnvironmentToCallResult(env)
 	},
 }
 
@@ -151,7 +151,7 @@ var EnvironmentUpdateTool = &Tool{
 		if err := environment.Update(ctx, request.GetString("explanation", ""), dockerfile, instructions); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to update environment", err), nil
 		}
-		return EnvironmentResponseFromEnvironment(environment)
+		return EnvironmentToCallResult(environment)
 	},
 }
 
