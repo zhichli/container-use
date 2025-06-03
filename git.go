@@ -66,7 +66,9 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 	}
 	currentBranch = strings.TrimSpace(currentBranch)
 
-	_, err = runGitCommand(localRepoPath, "push", "container-use", currentBranch)
+	// this is racy, i think? like if a human is rewriting history on a branch and creating containers, things get complicated.
+	// there's only 1 copy of the source branch in the localremote, so there's potential for conflicts.
+	_, err = runGitCommand(localRepoPath, "push", "container-use", "--force", currentBranch)
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +87,7 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 		}
 	}
 
-	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
+	_, err = runGitCommand(localRepoPath, "fetch", "container-use", c.BranchName())
 	if err != nil {
 		return "", err
 	}
@@ -328,30 +330,30 @@ func (s *Environment) addFilesFromUntrackedDirectory(worktreePath, dirName strin
 		if err != nil {
 			return err
 		}
-		
+
 		relPath, err := filepath.Rel(worktreePath, path)
 		if err != nil {
 			return err
 		}
-		
+
 		if info.IsDir() {
 			if s.shouldSkipFile(relPath + "/") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		
+
 		if s.shouldSkipFile(relPath) {
 			return nil
 		}
-		
+
 		if !s.isBinaryFile(worktreePath, relPath) {
 			_, err = runGitCommand(worktreePath, "add", relPath)
 			if err != nil {
 				return err
 			}
 		}
-		
+
 		return nil
 	})
 }
