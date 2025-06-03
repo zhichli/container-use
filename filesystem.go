@@ -105,7 +105,7 @@ func (s *Environment) RemoteDiff(ctx context.Context, source string, target stri
 	sourceDir := urlToDirectory(source)
 	targetDir := s.container.Directory(target)
 
-	diff, err := dag.Container().From(AlpineImage).
+	diff, err := dag.Container().From(alpineImage).
 		WithMountedDirectory("/source", sourceDir).
 		WithMountedDirectory("/target", targetDir).
 		WithExec([]string{"diff", "-burN", "/source", "/target"}, dagger.ContainerWithExecOpts{
@@ -137,7 +137,7 @@ func (s *Environment) revisionDiff(ctx context.Context, path string, fromVersion
 		path = s.Workdir
 	}
 	diffCtr := dag.Container().
-		From(AlpineImage).
+		From(alpineImage).
 		WithWorkdir("/diffs")
 	if directory {
 		diffCtr = diffCtr.
