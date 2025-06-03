@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -33,13 +34,13 @@ func (c *Environment) GetWorktreePath() (string, error) {
 	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", c.BranchName()))
 }
 
-func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
+func (c *Environment) InitializeWorktree(ctx context.Context, localRepoPath string) (string, error) {
 	localRepoPath, err := filepath.Abs(localRepoPath)
 	if err != nil {
 		return "", err
 	}
 
-	cuRepoPath, err := InitializeLocalRemote(localRepoPath)
+	cuRepoPath, err := InitializeLocalRemote(ctx, localRepoPath)
 	if err != nil {
 		return "", err
 	}
@@ -54,12 +55,12 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 	}
 
 	slog.Info("Initializing worktree", "container-id", c.ID, "container-name", c.Name, "branchName", c.BranchName())
-	_, err = runGitCommand(localRepoPath, "fetch", "container-use")
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use")
 	if err != nil {
 		return "", err
 	}
 
-	currentBranch, err := runGitCommand(localRepoPath, "branch", "--show-current")
+	currentBranch, err := runGitCommand(ctx, localRepoPath, "branch", "--show-current")
 	if err != nil {
 		return "", err
 	}
@@ -67,38 +68,38 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 
 	// this is racy, i think? like if a human is rewriting history on a branch and creating containers, things get complicated.
 	// there's only 1 copy of the source branch in the localremote, so there's potential for conflicts.
-	_, err = runGitCommand(localRepoPath, "push", "container-use", "--force", currentBranch)
+	_, err = runGitCommand(ctx, localRepoPath, "push", "container-use", "--force", currentBranch)
 	if err != nil {
 		return "", err
 	}
 
 	// create worktree, accomodating past partial failures where the branch pushed but the worktree wasn't created
-	_, err = runGitCommand(cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
+	_, err = runGitCommand(ctx, cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
 	if err != nil {
-		_, err = runGitCommand(cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		_, err = runGitCommand(cuRepoPath, "worktree", "add", worktreePath, c.BranchName())
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", worktreePath, c.BranchName())
 		if err != nil {
 			return "", err
 		}
 	}
 
-	if err := c.applyUncommittedChanges(localRepoPath, worktreePath); err != nil {
+	if err := c.applyUncommittedChanges(ctx, localRepoPath, worktreePath); err != nil {
 		return "", fmt.Errorf("failed to apply uncommitted changes: %w", err)
 	}
 
-	_, err = runGitCommand(localRepoPath, "fetch", "container-use", c.BranchName())
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", c.BranchName())
 	if err != nil {
 		return "", err
 	}
 
 	// set up remote tracking branch if it's not already there
-	_, err = runGitCommand(localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
+	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
 	if err != nil {
-		_, err = runGitCommand(localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
+		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
 		if err != nil {
 			return "", err
 		}
@@ -107,7 +108,7 @@ func (c *Environment) InitializeWorktree(localRepoPath string) (string, error) {
 	return worktreePath, nil
 }
 
-func InitializeLocalRemote(localRepoPath string) (string, error) {
+func InitializeLocalRemote(ctx context.Context, localRepoPath string) (string, error) {
 	localRepoPath, err := filepath.Abs(localRepoPath)
 	if err != nil {
 		return "", err
@@ -124,22 +125,22 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 	}
 
 	slog.Info("Initializing local remote", "local-repo-path", localRepoPath, "container-use-repo-path", cuRepoPath)
-	_, err = runGitCommand(localRepoPath, "clone", "--bare", localRepoPath, cuRepoPath)
+	_, err = runGitCommand(ctx, localRepoPath, "clone", "--bare", localRepoPath, cuRepoPath)
 	if err != nil {
 		return "", err
 	}
 
 	// set up local remote, updating it if it had been created previously at a different path
-	existingURL, err := runGitCommand(localRepoPath, "remote", "get-url", "container-use")
+	existingURL, err := runGitCommand(ctx, localRepoPath, "remote", "get-url", "container-use")
 	if err != nil {
-		_, err = runGitCommand(localRepoPath, "remote", "add", "container-use", cuRepoPath)
+		_, err = runGitCommand(ctx, localRepoPath, "remote", "add", "container-use", cuRepoPath)
 		if err != nil {
 			return "", err
 		}
 	} else {
 		existingURL = strings.TrimSpace(existingURL)
 		if existingURL != cuRepoPath {
-			_, err = runGitCommand(localRepoPath, "remote", "set-url", "container-use", cuRepoPath)
+			_, err = runGitCommand(ctx, localRepoPath, "remote", "set-url", "container-use", cuRepoPath)
 			if err != nil {
 				return "", err
 			}
@@ -148,11 +149,11 @@ func InitializeLocalRemote(localRepoPath string) (string, error) {
 	return cuRepoPath, nil
 }
 
-func runGitCommand(dir string, args ...string) (string, error) {
+func runGitCommand(ctx context.Context, dir string, args ...string) (string, error) {
 	slog.Info(fmt.Sprintf("[%s] $ git %s", dir, strings.Join(args, " ")))
 	defer slog.Info(fmt.Sprintf("[%s] $ git %s (DONE)", dir, strings.Join(args, " ")))
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 
 	output, err := cmd.CombinedOutput()
@@ -169,8 +170,16 @@ func runGitCommand(dir string, args ...string) (string, error) {
 }
 
 func (env *Environment) propagateToWorktree(ctx context.Context, name, explanation string) error {
-	slog.Info("Propagating to worktree...", "environment.id", env.ID, "environment.name", env.Name, "branchName", env.BranchName())
-	defer slog.Info("Propagating to worktree... (DONE)", "environment.id", env.ID, "environment.name", env.Name, "branchName", env.BranchName())
+	slog.Info("Propagating to worktree...",
+		"environment.id", env.ID,
+		"environment.name", env.Name,
+		"workdir", env.Workdir,
+		"branchName", env.BranchName())
+	defer slog.Info("Propagating to worktree... (DONE)",
+		"environment.id", env.ID,
+		"environment.name", env.Name,
+		"workdir", env.Workdir,
+		"branchName", env.BranchName())
 
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
@@ -191,9 +200,12 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return err
 	}
 
-	slog.Info("Committing changes to worktree")
-	if err := env.commitWorktreeChanges(worktreePath, name, explanation); err != nil {
+	if err := env.commitWorktreeChanges(ctx, worktreePath, name, explanation); err != nil {
 		return fmt.Errorf("failed to commit worktree changes: %w", err)
+	}
+
+	if err := env.commitStateToNotes(ctx, worktreePath); err != nil {
+		return fmt.Errorf("failed to add notes: %w", err)
 	}
 
 	localRepoPath, err := filepath.Abs(env.Source)
@@ -202,12 +214,67 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 	}
 
 	slog.Info("Fetching container-use remote in source repository")
-	_, err = runGitCommand(localRepoPath, "fetch", "container-use", env.BranchName())
-	return err
+	if _, err := runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.BranchName()); err != nil {
+		return err
+	}
+
+	fetchNotes := func() error {
+		_, err := runGitCommand(
+			ctx, localRepoPath, "fetch", "container-use", "refs/notes/container-use:refs/notes/container-use",
+		)
+		return err
+	}
+
+	if err := fetchNotes(); err != nil {
+		if !strings.Contains(err.Error(), "[rejected]") {
+			return fmt.Errorf("failed to fetch notes: %w", err)
+		}
+		// Remove ref and re-try
+		if _, err := runGitCommand(ctx, localRepoPath, "update-ref", "-d", "refs/notes/container-use"); err != nil {
+			return fmt.Errorf("failed to delete notes: %w", err)
+		}
+		if err := fetchNotes(); err != nil {
+			return fmt.Errorf("failed to fetch notes: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (s *Environment) commitWorktreeChanges(worktreePath, name, explanation string) error {
-	status, err := runGitCommand(worktreePath, "status", "--porcelain")
+func (s *Environment) commitStateToNotes(ctx context.Context, worktreePath string) error {
+	buff, err := json.MarshalIndent(s.History, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(os.TempDir(), ".container-use-git-notes-*")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.Write(buff); err != nil {
+		return err
+	}
+
+	_, err = runGitCommand(ctx, worktreePath, "notes", "--ref", "container-use", "add", "-f", "-F", f.Name())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Environment) loadStateFromNotes(ctx context.Context, worktreePath string) error {
+	buff, err := runGitCommand(ctx, worktreePath, "notes", "--ref", "container-use", "show")
+	if err != nil {
+		if strings.Contains(err.Error(), "no note found") {
+			return nil
+		}
+		return err
+	}
+	return json.Unmarshal([]byte(buff), &s.History)
+}
+
+func (s *Environment) commitWorktreeChanges(ctx context.Context, worktreePath, name, explanation string) error {
+	status, err := runGitCommand(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
 	}
@@ -216,20 +283,20 @@ func (s *Environment) commitWorktreeChanges(worktreePath, name, explanation stri
 		return nil
 	}
 
-	if err := s.addNonBinaryFiles(worktreePath); err != nil {
+	if err := s.addNonBinaryFiles(ctx, worktreePath); err != nil {
 		return err
 	}
 
 	commitMsg := fmt.Sprintf("%s\n\n%s", name, explanation)
-	_, err = runGitCommand(worktreePath, "commit", "-m", commitMsg)
+	_, err = runGitCommand(ctx, worktreePath, "commit", "-m", commitMsg)
 	return err
 }
 
 // AI slop below!
 // this is just to keep us moving fast because big git repos get hard to work with
 // and our demos like to download large dependencies.
-func (s *Environment) addNonBinaryFiles(worktreePath string) error {
-	statusOutput, err := runGitCommand(worktreePath, "status", "--porcelain")
+func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string) error {
+	statusOutput, err := runGitCommand(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
 	}
@@ -261,13 +328,13 @@ func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 			if strings.HasSuffix(fileName, "/") {
 				// Untracked directory - traverse and add non-binary files
 				dirName := strings.TrimSuffix(fileName, "/")
-				if err := s.addFilesFromUntrackedDirectory(worktreePath, dirName); err != nil {
+				if err := s.addFilesFromUntrackedDirectory(ctx, worktreePath, dirName); err != nil {
 					return err
 				}
 			} else {
 				// Untracked file - add if not binary
 				if !s.isBinaryFile(worktreePath, fileName) {
-					_, err = runGitCommand(worktreePath, "add", fileName)
+					_, err = runGitCommand(ctx, worktreePath, "add", fileName)
 					if err != nil {
 						return err
 					}
@@ -278,14 +345,14 @@ func (s *Environment) addNonBinaryFiles(worktreePath string) error {
 			continue
 		case indexStatus == 'D' || workTreeStatus == 'D':
 			// D = deleted files (always stage deletion)
-			_, err = runGitCommand(worktreePath, "add", fileName)
+			_, err = runGitCommand(ctx, worktreePath, "add", fileName)
 			if err != nil {
 				return err
 			}
 		default:
 			// M, R, C and other statuses - add if not binary
 			if !s.isBinaryFile(worktreePath, fileName) {
-				_, err = runGitCommand(worktreePath, "add", fileName)
+				_, err = runGitCommand(ctx, worktreePath, "add", fileName)
 				if err != nil {
 					return err
 				}
@@ -330,8 +397,8 @@ func (s *Environment) shouldSkipFile(fileName string) bool {
 	return false
 }
 
-func (c *Environment) applyUncommittedChanges(localRepoPath, worktreePath string) error {
-	status, err := runGitCommand(localRepoPath, "status", "--porcelain")
+func (c *Environment) applyUncommittedChanges(ctx context.Context, localRepoPath, worktreePath string) error {
+	status, err := runGitCommand(ctx, localRepoPath, "status", "--porcelain")
 	if err != nil {
 		return err
 	}
@@ -342,7 +409,7 @@ func (c *Environment) applyUncommittedChanges(localRepoPath, worktreePath string
 
 	slog.Info("Applying uncommitted changes to worktree", "container-id", c.ID, "container-name", c.Name)
 
-	patch, err := runGitCommand(localRepoPath, "diff", "HEAD")
+	patch, err := runGitCommand(ctx, localRepoPath, "diff", "HEAD")
 	if err != nil {
 		return err
 	}
@@ -356,7 +423,7 @@ func (c *Environment) applyUncommittedChanges(localRepoPath, worktreePath string
 		}
 	}
 
-	untrackedFiles, err := runGitCommand(localRepoPath, "ls-files", "--others", "--exclude-standard")
+	untrackedFiles, err := runGitCommand(ctx, localRepoPath, "ls-files", "--others", "--exclude-standard")
 	if err != nil {
 		return err
 	}
@@ -377,10 +444,10 @@ func (c *Environment) applyUncommittedChanges(localRepoPath, worktreePath string
 		}
 	}
 
-	return c.commitWorktreeChanges(worktreePath, "Copy uncommitted changes", "Applied uncommitted changes from local repository")
+	return c.commitWorktreeChanges(ctx, worktreePath, "Copy uncommitted changes", "Applied uncommitted changes from local repository")
 }
 
-func (s *Environment) addFilesFromUntrackedDirectory(worktreePath, dirName string) error {
+func (s *Environment) addFilesFromUntrackedDirectory(ctx context.Context, worktreePath, dirName string) error {
 	dirPath := filepath.Join(worktreePath, dirName)
 
 	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -405,7 +472,7 @@ func (s *Environment) addFilesFromUntrackedDirectory(worktreePath, dirName strin
 		}
 
 		if !s.isBinaryFile(worktreePath, relPath) {
-			_, err = runGitCommand(worktreePath, "add", relPath)
+			_, err = runGitCommand(ctx, worktreePath, "add", relPath)
 			if err != nil {
 				return err
 			}

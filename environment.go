@@ -21,9 +21,9 @@ import (
 const (
 	defaultImage     = "ubuntu:24.04"
 	alpineImage      = "alpine:3.21.3@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c"
-	configDir        = "." // FIXME(aluzzardi): should be .container-use
+	configDir        = ".container-use"
 	instructionsFile = "AGENT.md"
-	environmentFile  = "container-use.json"
+	environmentFile  = "environment.json"
 	lockFile         = "lock"
 )
 
@@ -77,7 +77,7 @@ type Environment struct {
 	BaseImage     string   `json:"base_image"`
 	SetupCommands []string `json:"setup_commands"`
 
-	History History `json:"history"`
+	History History `json:"-"`
 
 	mu        sync.Mutex
 	container *dagger.Container
@@ -121,10 +121,6 @@ func (env *Environment) load(baseDir string) error {
 	if err := json.Unmarshal(envState, env); err != nil {
 		return err
 	}
-	for _, revision := range env.History {
-		revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
-	}
-	env.container = env.History.Latest().container
 
 	return nil
 }
@@ -174,7 +170,7 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 		Workdir:      "/workdir",
 	}
 
-	worktreePath, err := env.InitializeWorktree(source)
+	worktreePath, err := env.InitializeWorktree(ctx, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed intializing worktree: %w", err)
 	}
@@ -210,11 +206,22 @@ func OpenEnvironment(ctx context.Context, explanation, source, name string) (*En
 
 	env.Name = name
 	env.Source = source
-	worktreePath, err := env.InitializeWorktree(source)
+	worktreePath, err := env.InitializeWorktree(ctx, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed intializing worktree: %w", err)
 	}
 	env.Worktree = worktreePath
+
+	if err := env.loadStateFromNotes(ctx, worktreePath); err != nil {
+		return nil, fmt.Errorf("failed to load state from notes: %w", err)
+	}
+
+	for _, revision := range env.History {
+		revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
+	}
+	if latest := env.History.Latest(); latest != nil {
+		env.container = latest.container
+	}
 
 	environments[env.ID] = env
 	return env, nil
@@ -340,7 +347,7 @@ func (env *Environment) RunBackground(ctx context.Context, explanation, command,
 	svc, err := serviceState.AsService(dagger.ContainerAsServiceOpts{
 		Args:          args,
 		UseEntrypoint: useEntrypoint,
-	}).Start(context.Background())
+	}).Start(ctx)
 	if err != nil {
 		var exitErr *dagger.ExecError
 		if errors.As(err, &exitErr) {
@@ -362,7 +369,7 @@ func (env *Environment) RunBackground(ctx context.Context, explanation, command,
 	}
 
 	// Expose ports on the host
-	tunnel, err := dag.Host().Tunnel(svc, dagger.HostTunnelOpts{Ports: hostForwards}).Start(context.Background())
+	tunnel, err := dag.Host().Tunnel(svc, dagger.HostTunnelOpts{Ports: hostForwards}).Start(ctx)
 	if err != nil {
 		return nil, err
 	}
