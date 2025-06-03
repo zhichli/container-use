@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -176,12 +174,7 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return err
 	}
 
-	// FIXME(aluzzardi): hackish, but it works
-	envState, err := json.MarshalIndent(env, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path.Join(worktreePath, environmentFile), envState, 0644); err != nil {
+	if err := env.save(worktreePath); err != nil {
 		return err
 	}
 

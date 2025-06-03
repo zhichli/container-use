@@ -78,6 +78,62 @@ type Environment struct {
 	container *dagger.Container
 }
 
+func (env *Environment) save(baseDir string) error {
+	// FIXME(aluzzardi): hackish, but it works
+	envState, err := json.MarshalIndent(env, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(path.Join(baseDir, environmentFile), envState, 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (env *Environment) load(baseDir string) error {
+	envState, err := os.ReadFile(path.Join(baseDir, environmentFile))
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(envState, env); err != nil {
+		return err
+	}
+	for _, revision := range env.History {
+		revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
+	}
+	env.container = env.History.Latest().container
+
+	return nil
+}
+
+func (e *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
+	if _, err := newState.Sync(ctx); err != nil {
+		return err
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	revision := &Revision{
+		Version:     e.History.LatestVersion() + 1,
+		Name:        name,
+		Explanation: explanation,
+		Output:      output,
+		CreatedAt:   time.Now(),
+		container:   newState,
+	}
+	containerID, err := revision.container.ID(ctx)
+	if err != nil {
+		return err
+	}
+	revision.State = string(containerID)
+	e.container = revision.container
+	e.History = append(e.History, revision)
+
+	return nil
+}
+
 var environments = map[string]*Environment{}
 
 func CreateEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
@@ -116,18 +172,14 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 }
 
 func OpenEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
-	// FIXME(aluzzardi): this is a mess, not doing what it was intended to do originally
-	def, err := os.ReadFile(path.Join(source, environmentFile))
-	if err != nil {
+	env := &Environment{}
+	if err := env.load(source); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return CreateEnvironment(ctx, explanation, source, name)
 		}
 		return nil, err
 	}
-	env := &Environment{}
-	if err := json.Unmarshal(def, env); err != nil {
-		return nil, err
-	}
+
 	env.Name = name
 	env.Source = source
 	worktreePath, err := env.InitializeWorktree(source)
@@ -135,11 +187,6 @@ func OpenEnvironment(ctx context.Context, explanation, source, name string) (*En
 		return nil, fmt.Errorf("failed intializing worktree: %w", err)
 	}
 	env.Worktree = worktreePath
-
-	for _, revision := range env.History {
-		revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
-	}
-	env.container = env.History.Latest().container
 
 	environments[env.ID] = env
 	return env, nil
@@ -193,38 +240,12 @@ func ListEnvironments() []*Environment {
 	return env
 }
 
-func (e *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
-	if _, err := newState.Sync(ctx); err != nil {
-		return err
-	}
-
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	revision := &Revision{
-		Version:     e.History.LatestVersion() + 1,
-		Name:        name,
-		Explanation: explanation,
-		Output:      output,
-		CreatedAt:   time.Now(),
-		container:   newState,
-	}
-	containerID, err := revision.container.ID(ctx)
-	if err != nil {
-		return err
-	}
-	revision.State = string(containerID)
-	e.container = revision.container
-	e.History = append(e.History, revision)
-
-	return nil
-}
-
-func (s *Environment) Run(ctx context.Context, explanation, command, shell string, useEntrypoint bool) (string, error) {
+func (env *Environment) Run(ctx context.Context, explanation, command, shell string, useEntrypoint bool) (string, error) {
 	args := []string{}
 	if command != "" {
 		args = []string{shell, "-c", command}
 	}
-	newState := s.container.WithExec(args, dagger.ContainerWithExecOpts{
+	newState := env.container.WithExec(args, dagger.ContainerWithExecOpts{
 		UseEntrypoint: useEntrypoint,
 	})
 	stdout, err := newState.Stdout(ctx)
@@ -235,11 +256,11 @@ func (s *Environment) Run(ctx context.Context, explanation, command, shell strin
 		}
 		return "", err
 	}
-	if err := s.apply(ctx, "Run "+command, explanation, stdout, newState); err != nil {
+	if err := env.apply(ctx, "Run "+command, explanation, stdout, newState); err != nil {
 		return "", err
 	}
 
-	if err := s.propagateToWorktree(ctx, "Run "+command, explanation); err != nil {
+	if err := env.propagateToWorktree(ctx, "Run "+command, explanation); err != nil {
 		return "", fmt.Errorf("failed to propagate to worktree: %w", err)
 	}
 
@@ -253,12 +274,12 @@ type EndpointMapping struct {
 
 type EndpointMappings map[int]*EndpointMapping
 
-func (s *Environment) RunBackground(ctx context.Context, explanation, command, shell string, ports []int, useEntrypoint bool) (EndpointMappings, error) {
+func (env *Environment) RunBackground(ctx context.Context, explanation, command, shell string, ports []int, useEntrypoint bool) (EndpointMappings, error) {
 	args := []string{}
 	if command != "" {
 		args = []string{shell, "-c", command}
 	}
-	serviceState := s.container
+	serviceState := env.container
 
 	// Expose ports
 	for _, port := range ports {
@@ -323,8 +344,8 @@ func (s *Environment) RunBackground(ctx context.Context, explanation, command, s
 	return endpoints, nil
 }
 
-func (s *Environment) SetEnv(ctx context.Context, explanation string, envs []string) error {
-	state := s.container
+func (env *Environment) SetEnv(ctx context.Context, explanation string, envs []string) error {
+	state := env.container
 	for _, env := range envs {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) != 2 {
@@ -332,24 +353,24 @@ func (s *Environment) SetEnv(ctx context.Context, explanation string, envs []str
 		}
 		state = state.WithEnvVariable(parts[0], parts[1])
 	}
-	return s.apply(ctx, "Set env "+strings.Join(envs, ", "), explanation, "", state)
+	return env.apply(ctx, "Set env "+strings.Join(envs, ", "), explanation, "", state)
 }
 
-func (s *Environment) Revert(ctx context.Context, explanation string, version Version) error {
-	revision := s.History.Get(version)
+func (env *Environment) Revert(ctx context.Context, explanation string, version Version) error {
+	revision := env.History.Get(version)
 	if revision == nil {
 		return errors.New("no revisions found")
 	}
-	if err := s.apply(ctx, "Revert to "+revision.Name, explanation, "", revision.container); err != nil {
+	if err := env.apply(ctx, "Revert to "+revision.Name, explanation, "", revision.container); err != nil {
 		return err
 	}
-	return s.propagateToWorktree(ctx, "Revert to "+revision.Name, explanation)
+	return env.propagateToWorktree(ctx, "Revert to "+revision.Name, explanation)
 }
 
-func (s *Environment) Fork(ctx context.Context, explanation, name string, version *Version) (*Environment, error) {
-	revision := s.History.Latest()
+func (env *Environment) Fork(ctx context.Context, explanation, name string, version *Version) (*Environment, error) {
+	revision := env.History.Latest()
 	if version != nil {
-		revision = s.History.Get(*version)
+		revision = env.History.Get(*version)
 	}
 	if revision == nil {
 		return nil, errors.New("version not found")
@@ -359,7 +380,7 @@ func (s *Environment) Fork(ctx context.Context, explanation, name string, versio
 		ID:   uuid.New().String(),
 		Name: name,
 	}
-	if err := forkedEnvironment.apply(ctx, "Fork from "+s.Name, explanation, "", revision.container); err != nil {
+	if err := forkedEnvironment.apply(ctx, "Fork from "+env.Name, explanation, "", revision.container); err != nil {
 		return nil, err
 	}
 	environments[forkedEnvironment.ID] = forkedEnvironment

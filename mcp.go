@@ -26,7 +26,6 @@ func init() {
 		EnvironmentOpenTool,
 		EnvironmentUpdateTool,
 
-		// EnvironmentCreateTool,
 		// EnvironmentListTool,
 		// EnvironmentHistoryTool,
 		// EnvironmentRevertTool,
