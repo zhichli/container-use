@@ -26,6 +26,8 @@ func parseLogLevel(levelStr string) slog.Level {
 	}
 }
 
+var globalLog *os.File
+
 func setupLogger() error {
 	var writers []io.Writer
 	writers = append(writers, os.Stderr)
@@ -35,6 +37,7 @@ func setupLogger() error {
 		if err != nil {
 			return fmt.Errorf("failed to open log file %s: %w", logFile, err)
 		}
+		globalLog = file
 		writers = append(writers, file)
 	}
 
