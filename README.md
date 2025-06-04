@@ -10,6 +10,14 @@ Containerized environments for coding agents
 go run .
 ```
 
+### Claude Code
+
+```sh
+npx @anthropic-ai/claude-code mcp add container-use -e CU_STDERR_FILE=/tmp/cu.debug.stderr.log -- container-use
+```
+
+Update `CLAUDE.md`
+
 ### Goose
 
 In `~/.config/goose/config.yaml`
@@ -27,6 +35,8 @@ extensions:
     envs:
       CU_STDERR_FILE: /tmp/cu.debug.stderr.log
 ```
+
+Update `.goosehints
 
 ## Examples
 
