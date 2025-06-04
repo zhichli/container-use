@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,9 @@ import (
 )
 
 var dag *dagger.Client
+
+//go:embed CLAUDE.md
+var mcpRules string
 
 func dumpStacks() {
 	buf := make([]byte, 1<<20) // 1MB buffer
@@ -51,6 +55,7 @@ func main() {
 	s := server.NewMCPServer(
 		"Dagger",
 		"1.0.0",
+		server.WithInstructions(mcpRules),
 	)
 
 	for _, t := range tools {
