@@ -133,15 +133,15 @@ func (env *Environment) isLocked(baseDir string) bool {
 	return false
 }
 
-func (e *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
+func (env *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
 	if _, err := newState.Sync(ctx); err != nil {
 		return err
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	env.mu.Lock()
+	defer env.mu.Unlock()
 	revision := &Revision{
-		Version:     e.History.LatestVersion() + 1,
+		Version:     env.History.LatestVersion() + 1,
 		Name:        name,
 		Explanation: explanation,
 		Output:      output,
@@ -153,15 +153,15 @@ func (e *Environment) apply(ctx context.Context, name, explanation, output strin
 		return err
 	}
 	revision.State = string(containerID)
-	e.container = revision.container
-	e.History = append(e.History, revision)
+	env.container = revision.container
+	env.History = append(env.History, revision)
 
 	return nil
 }
 
 var environments = map[string]*Environment{}
 
-func CreateEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
+func Create(ctx context.Context, explanation, source, name string) (*Environment, error) {
 	env := &Environment{
 		ID:           uuid.New().String(),
 		Name:         name,
@@ -201,14 +201,14 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 	return env, nil
 }
 
-func OpenEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
+func Open(ctx context.Context, explanation, source, name string) (*Environment, error) {
 	// FIXME(aluzzardi): This is a mess. For now, we're not supporting re-opening existing environment states.
-	return CreateEnvironment(ctx, explanation, source, name)
+	return Create(ctx, explanation, source, name)
 
 	env := &Environment{}
 	if err := env.load(source); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return CreateEnvironment(ctx, explanation, source, name)
+			return Create(ctx, explanation, source, name)
 		}
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func (env *Environment) Update(ctx context.Context, explanation, instructions, b
 	return env.propagateToWorktree(ctx, "Update environment "+env.Name, explanation)
 }
 
-func GetEnvironment(idOrName string) *Environment {
+func Get(idOrName string) *Environment {
 	if environment, ok := environments[idOrName]; ok {
 		return environment
 	}
@@ -296,7 +296,7 @@ func GetEnvironment(idOrName string) *Environment {
 	return nil
 }
 
-func ListEnvironments() []*Environment {
+func List() []*Environment {
 	env := make([]*Environment, 0, len(environments))
 	for _, environment := range environments {
 		env = append(env, environment)

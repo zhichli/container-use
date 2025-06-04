@@ -19,7 +19,7 @@ type Tool struct {
 
 var Tools = []*Tool{}
 
-func RegisterTool(tool ...*Tool) {
+func registerTool(tool ...*Tool) {
 	for _, t := range tool {
 		Tools = append(Tools, wrapTool(t))
 	}
@@ -37,7 +37,7 @@ func wrapTool(t *Tool) *Tool {
 }
 
 func init() {
-	RegisterTool(
+	registerTool(
 		EnvironmentOpenTool,
 		EnvironmentUpdateTool,
 
@@ -124,7 +124,7 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 		if err != nil {
 			return nil, err
 		}
-		env, err := environment.OpenEnvironment(ctx, request.GetString("explanation", ""), source, name)
+		env, err := environment.Open(ctx, request.GetString("explanation", ""), source, name)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to open environment", err), nil
 		}
@@ -164,7 +164,7 @@ var EnvironmentUpdateTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -196,7 +196,7 @@ var EnvironmentListTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		envs := environment.ListEnvironments()
+		envs := environment.List()
 		out, err := json.Marshal(envs)
 		if err != nil {
 			return nil, err
@@ -229,7 +229,7 @@ var EnvironmentForkTool = &Tool{
 			return nil, err
 		}
 
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -270,7 +270,7 @@ var EnvironmentHistoryTool = &Tool{
 			return nil, err
 		}
 
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -305,7 +305,7 @@ var EnvironmentRevertTool = &Tool{
 			return nil, err
 		}
 
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -358,7 +358,7 @@ Failure to do so will result in the tool being stuck, awaiting for the command t
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -419,7 +419,7 @@ var EnvironmentSetEnvTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -458,7 +458,7 @@ var EnvironmentUploadTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -504,7 +504,7 @@ var EnvironmentDownloadTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -550,7 +550,7 @@ var EnvironmentDiffTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -602,7 +602,7 @@ var EnvironmentFileReadTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -644,7 +644,7 @@ var EnvironmentFileListTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -687,7 +687,7 @@ var EnvironmentFileWriteTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -729,7 +729,7 @@ var EnvironmentFileDeleteTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
@@ -773,7 +773,7 @@ var EnvironmentRevisionDiffTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		env := environment.GetEnvironment(envID)
+		env := environment.Get(envID)
 		if env == nil {
 			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}

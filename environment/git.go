@@ -31,15 +31,15 @@ func getRepoPath(repoName string) (string, error) {
 	))
 }
 
-func (c *Environment) BranchName() string {
-	return fmt.Sprintf("%s-%s", c.Name, c.ID[:8])
+func (env *Environment) BranchName() string {
+	return fmt.Sprintf("%s-%s", env.Name, env.ID[:8])
 }
 
-func (c *Environment) GetWorktreePath() (string, error) {
-	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", c.BranchName()))
+func (env *Environment) GetWorktreePath() (string, error) {
+	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", env.BranchName()))
 }
 
-func (c *Environment) InitializeWorktree(ctx context.Context, localRepoPath string) (string, error) {
+func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath string) (string, error) {
 	localRepoPath, err := filepath.Abs(localRepoPath)
 	if err != nil {
 		return "", err
@@ -50,7 +50,7 @@ func (c *Environment) InitializeWorktree(ctx context.Context, localRepoPath stri
 		return "", err
 	}
 
-	worktreePath, err := c.GetWorktreePath()
+	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +59,7 @@ func (c *Environment) InitializeWorktree(ctx context.Context, localRepoPath stri
 		return worktreePath, nil
 	}
 
-	slog.Info("Initializing worktree", "container-id", c.ID, "container-name", c.Name, "branchName", c.BranchName())
+	slog.Info("Initializing worktree", "container-id", env.ID, "container-name", env.Name, "branchName", env.BranchName())
 	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use")
 	if err != nil {
 		return "", err
@@ -79,32 +79,32 @@ func (c *Environment) InitializeWorktree(ctx context.Context, localRepoPath stri
 	}
 
 	// create worktree, accomodating past partial failures where the branch pushed but the worktree wasn't created
-	_, err = runGitCommand(ctx, cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
+	_, err = runGitCommand(ctx, cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.BranchName()))
 	if err != nil {
-		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", "-b", c.BranchName(), worktreePath, currentBranch)
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", "-b", env.BranchName(), worktreePath, currentBranch)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", worktreePath, c.BranchName())
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", worktreePath, env.BranchName())
 		if err != nil {
 			return "", err
 		}
 	}
 
-	if err := c.applyUncommittedChanges(ctx, localRepoPath, worktreePath); err != nil {
+	if err := env.applyUncommittedChanges(ctx, localRepoPath, worktreePath); err != nil {
 		return "", fmt.Errorf("failed to apply uncommitted changes: %w", err)
 	}
 
-	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", c.BranchName())
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.BranchName())
 	if err != nil {
 		return "", err
 	}
 
 	// set up remote tracking branch if it's not already there
-	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", c.BranchName()))
+	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.BranchName()))
 	if err != nil {
-		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", c.BranchName(), fmt.Sprintf("container-use/%s", c.BranchName()))
+		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", env.BranchName(), fmt.Sprintf("container-use/%s", env.BranchName()))
 		if err != nil {
 			return "", err
 		}
@@ -230,16 +230,16 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 	return nil
 }
 
-func (s *Environment) propagateGitNotes(ctx context.Context, ref string) error {
+func (env *Environment) propagateGitNotes(ctx context.Context, ref string) error {
 	fullRef := fmt.Sprintf("refs/notes/%s", ref)
 	fetch := func() error {
-		_, err := runGitCommand(ctx, s.Source, "fetch", "container-use", fullRef+":"+fullRef)
+		_, err := runGitCommand(ctx, env.Source, "fetch", "container-use", fullRef+":"+fullRef)
 		return err
 	}
 
 	if err := fetch(); err != nil {
 		if strings.Contains(err.Error(), "[rejected]") {
-			if _, err := runGitCommand(ctx, s.Source, "update-ref", "-d", fullRef); err == nil {
+			if _, err := runGitCommand(ctx, env.Source, "update-ref", "-d", fullRef); err == nil {
 				return fetch()
 			}
 		}
@@ -248,8 +248,8 @@ func (s *Environment) propagateGitNotes(ctx context.Context, ref string) error {
 	return nil
 }
 
-func (s *Environment) commitStateToNotes(ctx context.Context) error {
-	buff, err := json.MarshalIndent(s.History, "", "  ")
+func (env *Environment) commitStateToNotes(ctx context.Context) error {
+	buff, err := json.MarshalIndent(env.History, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -262,22 +262,22 @@ func (s *Environment) commitStateToNotes(ctx context.Context) error {
 		return err
 	}
 
-	_, err = runGitCommand(ctx, s.Worktree, "notes", "--ref", gitNotesStateRef, "add", "-f", "-F", f.Name())
+	_, err = runGitCommand(ctx, env.Worktree, "notes", "--ref", gitNotesStateRef, "add", "-f", "-F", f.Name())
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Environment) addGitNote(ctx context.Context, note string) error {
-	_, err := runGitCommand(ctx, s.Worktree, "notes", "--ref", "container-use", "append", "-m", note)
+func (env *Environment) addGitNote(ctx context.Context, note string) error {
+	_, err := runGitCommand(ctx, env.Worktree, "notes", "--ref", "container-use", "append", "-m", note)
 	if err != nil {
 		return err
 	}
-	return s.propagateGitNotes(ctx, gitNotesLogRef)
+	return env.propagateGitNotes(ctx, gitNotesLogRef)
 }
 
-func (s *Environment) loadStateFromNotes(ctx context.Context, worktreePath string) error {
+func (env *Environment) loadStateFromNotes(ctx context.Context, worktreePath string) error {
 	buff, err := runGitCommand(ctx, worktreePath, "notes", "--ref", gitNotesStateRef, "show")
 	if err != nil {
 		if strings.Contains(err.Error(), "no note found") {
@@ -285,10 +285,10 @@ func (s *Environment) loadStateFromNotes(ctx context.Context, worktreePath strin
 		}
 		return err
 	}
-	return json.Unmarshal([]byte(buff), &s.History)
+	return json.Unmarshal([]byte(buff), &env.History)
 }
 
-func (s *Environment) commitWorktreeChanges(ctx context.Context, worktreePath, name, explanation string) error {
+func (env *Environment) commitWorktreeChanges(ctx context.Context, worktreePath, name, explanation string) error {
 	status, err := runGitCommand(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func (s *Environment) commitWorktreeChanges(ctx context.Context, worktreePath, n
 		return nil
 	}
 
-	if err := s.addNonBinaryFiles(ctx, worktreePath); err != nil {
+	if err := env.addNonBinaryFiles(ctx, worktreePath); err != nil {
 		return err
 	}
 
@@ -310,7 +310,7 @@ func (s *Environment) commitWorktreeChanges(ctx context.Context, worktreePath, n
 // AI slop below!
 // this is just to keep us moving fast because big git repos get hard to work with
 // and our demos like to download large dependencies.
-func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string) error {
+func (env *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string) error {
 	statusOutput, err := runGitCommand(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string
 			continue
 		}
 
-		if s.shouldSkipFile(fileName) {
+		if env.shouldSkipFile(fileName) {
 			continue
 		}
 
@@ -343,12 +343,12 @@ func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string
 			if strings.HasSuffix(fileName, "/") {
 				// Untracked directory - traverse and add non-binary files
 				dirName := strings.TrimSuffix(fileName, "/")
-				if err := s.addFilesFromUntrackedDirectory(ctx, worktreePath, dirName); err != nil {
+				if err := env.addFilesFromUntrackedDirectory(ctx, worktreePath, dirName); err != nil {
 					return err
 				}
 			} else {
 				// Untracked file - add if not binary
-				if !s.isBinaryFile(worktreePath, fileName) {
+				if !env.isBinaryFile(worktreePath, fileName) {
 					_, err = runGitCommand(ctx, worktreePath, "add", fileName)
 					if err != nil {
 						return err
@@ -366,7 +366,7 @@ func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string
 			}
 		default:
 			// M, R, C and other statuses - add if not binary
-			if !s.isBinaryFile(worktreePath, fileName) {
+			if !env.isBinaryFile(worktreePath, fileName) {
 				_, err = runGitCommand(ctx, worktreePath, "add", fileName)
 				if err != nil {
 					return err
@@ -378,7 +378,7 @@ func (s *Environment) addNonBinaryFiles(ctx context.Context, worktreePath string
 	return nil
 }
 
-func (s *Environment) shouldSkipFile(fileName string) bool {
+func (env *Environment) shouldSkipFile(fileName string) bool {
 	skipExtensions := []string{
 		".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tbz2", ".tar.xz", ".txz",
 		".zip", ".rar", ".7z", ".gz", ".bz2", ".xz",
@@ -412,7 +412,7 @@ func (s *Environment) shouldSkipFile(fileName string) bool {
 	return false
 }
 
-func (c *Environment) applyUncommittedChanges(ctx context.Context, localRepoPath, worktreePath string) error {
+func (env *Environment) applyUncommittedChanges(ctx context.Context, localRepoPath, worktreePath string) error {
 	status, err := runGitCommand(ctx, localRepoPath, "status", "--porcelain")
 	if err != nil {
 		return err
@@ -422,7 +422,7 @@ func (c *Environment) applyUncommittedChanges(ctx context.Context, localRepoPath
 		return nil
 	}
 
-	slog.Info("Applying uncommitted changes to worktree", "container-id", c.ID, "container-name", c.Name)
+	slog.Info("Applying uncommitted changes to worktree", "container-id", env.ID, "container-name", env.Name)
 
 	patch, err := runGitCommand(ctx, localRepoPath, "diff", "HEAD")
 	if err != nil {
@@ -459,10 +459,10 @@ func (c *Environment) applyUncommittedChanges(ctx context.Context, localRepoPath
 		}
 	}
 
-	return c.commitWorktreeChanges(ctx, worktreePath, "Copy uncommitted changes", "Applied uncommitted changes from local repository")
+	return env.commitWorktreeChanges(ctx, worktreePath, "Copy uncommitted changes", "Applied uncommitted changes from local repository")
 }
 
-func (s *Environment) addFilesFromUntrackedDirectory(ctx context.Context, worktreePath, dirName string) error {
+func (env *Environment) addFilesFromUntrackedDirectory(ctx context.Context, worktreePath, dirName string) error {
 	dirPath := filepath.Join(worktreePath, dirName)
 
 	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -476,17 +476,17 @@ func (s *Environment) addFilesFromUntrackedDirectory(ctx context.Context, worktr
 		}
 
 		if info.IsDir() {
-			if s.shouldSkipFile(relPath + "/") {
+			if env.shouldSkipFile(relPath + "/") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if s.shouldSkipFile(relPath) {
+		if env.shouldSkipFile(relPath) {
 			return nil
 		}
 
-		if !s.isBinaryFile(worktreePath, relPath) {
+		if !env.isBinaryFile(worktreePath, relPath) {
 			_, err = runGitCommand(ctx, worktreePath, "add", relPath)
 			if err != nil {
 				return err
@@ -497,7 +497,7 @@ func (s *Environment) addFilesFromUntrackedDirectory(ctx context.Context, worktr
 	})
 }
 
-func (s *Environment) isBinaryFile(worktreePath, fileName string) bool {
+func (env *Environment) isBinaryFile(worktreePath, fileName string) bool {
 	fullPath := filepath.Join(worktreePath, fileName)
 
 	stat, err := os.Stat(fullPath)
