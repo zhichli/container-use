@@ -273,6 +273,19 @@ func (env *Environment) addGitNote(ctx context.Context, note string) error {
 	return env.propagateGitNotes(ctx, gitNotesLogRef)
 }
 
+func StateFromCommit(ctx context.Context, repoDir, commit string) (History, error) {
+	buff, err := runGitCommand(ctx, repoDir, "notes", "--ref", gitNotesStateRef, "show")
+	if err != nil {
+		return nil, err
+	}
+
+	var history History
+	if err := json.Unmarshal([]byte(buff), &history); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
 func (env *Environment) loadStateFromNotes(ctx context.Context, worktreePath string) error {
 	buff, err := runGitCommand(ctx, worktreePath, "notes", "--ref", gitNotesStateRef, "show")
 	if err != nil {
