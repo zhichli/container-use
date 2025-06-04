@@ -17,7 +17,7 @@ Enabling `container-use` requires 2 steps:
 1. Adding an MCP configuration for `container-use`
 2. (Optional) Adding a rule so the agent uses containarized environments.
 
-## Claude Code
+### Claude Code
 
 ```sh
 # Add the container-use MCP
@@ -27,7 +27,7 @@ npx @anthropic-ai/claude-code mcp add container-use -- <path to container-use> s
 curl -o CLAUDE.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
 ```
 
-## Goose
+### Goose
 
 Add this to `~/.config/goose/config.yaml`:
 
@@ -43,13 +43,13 @@ extensions:
     envs: []
 ```
 
-## Cursor
+### Cursor
 
 ```sh
 curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/cursor.mdc
 ```
 
-## VSCode / GitHub Copilot
+### VSCode / GitHub Copilot
 
 ```sh
 curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
@@ -69,4 +69,12 @@ Run with goose:
 
 ```console
 goose run -i ./examples/security.md -s
+```
+
+## Watching your agents work
+
+Your agents will automatically commit to a container-use remote on your local filesystem. You can watch the progress of your agents in real time by running:
+
+```console
+container-use watch
 ```
