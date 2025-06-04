@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"dagger.io/dagger"
+	"github.com/aluzzardi/container-use/environment"
 	"github.com/aluzzardi/container-use/mcpserver"
 	"github.com/spf13/cobra"
 )
@@ -47,6 +48,7 @@ var (
 			}
 			defer dag.Close()
 
+			environment.Initialize(dag)
 			return mcpserver.RunStdioServer(ctx)
 		},
 	}

@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"dagger.io/dagger"
-	"dagger.io/dagger/dag"
 
 	"github.com/google/uuid"
 )
+
+var dag *dagger.Client
 
 const (
 	defaultImage     = "ubuntu:24.04"
@@ -64,6 +65,11 @@ func (h History) Get(version Version) *Revision {
 			return revision
 		}
 	}
+	return nil
+}
+
+func Initialize(client *dagger.Client) error {
+	dag = client
 	return nil
 }
 
@@ -205,35 +211,35 @@ func Open(ctx context.Context, explanation, source, name string) (*Environment, 
 	// FIXME(aluzzardi): This is a mess. For now, we're not supporting re-opening existing environment states.
 	return Create(ctx, explanation, source, name)
 
-	env := &Environment{}
-	if err := env.load(source); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Create(ctx, explanation, source, name)
-		}
-		return nil, err
-	}
+	// env := &Environment{}
+	// if err := env.load(source); err != nil {
+	// 	if errors.Is(err, os.ErrNotExist) {
+	// 		return Create(ctx, explanation, source, name)
+	// 	}
+	// 	return nil, err
+	// }
 
-	env.Name = name
-	env.Source = source
-	worktreePath, err := env.InitializeWorktree(ctx, source)
-	if err != nil {
-		return nil, fmt.Errorf("failed intializing worktree: %w", err)
-	}
-	env.Worktree = worktreePath
+	// env.Name = name
+	// env.Source = source
+	// worktreePath, err := env.InitializeWorktree(ctx, source)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed intializing worktree: %w", err)
+	// }
+	// env.Worktree = worktreePath
 
-	if err := env.loadStateFromNotes(ctx, worktreePath); err != nil {
-		return nil, fmt.Errorf("failed to load state from notes: %w", err)
-	}
+	// if err := env.loadStateFromNotes(ctx, worktreePath); err != nil {
+	// 	return nil, fmt.Errorf("failed to load state from notes: %w", err)
+	// }
 
-	for _, revision := range env.History {
-		revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
-	}
-	if latest := env.History.Latest(); latest != nil {
-		env.container = latest.container
-	}
+	// for _, revision := range env.History {
+	// 	revision.container = dag.LoadContainerFromID(dagger.ContainerID(revision.State))
+	// }
+	// if latest := env.History.Latest(); latest != nil {
+	// 	env.container = latest.container
+	// }
 
-	environments[env.ID] = env
-	return env, nil
+	// environments[env.ID] = env
+	// return env, nil
 }
 
 func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error) {

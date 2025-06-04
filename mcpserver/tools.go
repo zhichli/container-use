@@ -2,12 +2,14 @@ package mcpserver
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/aluzzardi/container-use/environment"
+	"github.com/aluzzardi/container-use/rules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -15,6 +17,21 @@ import (
 type Tool struct {
 	Definition mcp.Tool
 	Handler    server.ToolHandlerFunc
+}
+
+func RunStdioServer(ctx context.Context) error {
+	s := server.NewMCPServer(
+		"Dagger",
+		"1.0.0",
+		server.WithInstructions(rules.AgentRules),
+	)
+
+	for _, t := range tools {
+		s.AddTool(t.Definition, t.Handler)
+	}
+
+	slog.Info("starting server")
+	return server.ServeStdio(s)
 }
 
 var tools = []*Tool{}
