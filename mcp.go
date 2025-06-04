@@ -97,7 +97,11 @@ func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
 
 var EnvironmentOpenTool = &Tool{
 	Definition: mcp.NewTool("environment_open",
-		mcp.WithDescription(`Opens (or creates) a development environment. The environment is the result of a the setups commands on top of the base image. Read carefully the instructions to understand the environment. DO NOT manually install toolchains inside the environment, instead explicitly call environment_update"`),
+		mcp.WithDescription(`Opens (or creates) a development environment.
+The environment is the result of a the setups commands on top of the base image.
+Read carefully the instructions to understand the environment.
+DO NOT manually install toolchains inside the environment, instead explicitly call environment_update`,
+		),
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this environment is being opened or created."),
 		),
@@ -129,7 +133,9 @@ var EnvironmentOpenTool = &Tool{
 
 var EnvironmentUpdateTool = &Tool{
 	Definition: mcp.NewTool("environment_update",
-		mcp.WithDescription(`Updates an environment with new instructions and toolchains. If the environment is missing any tools or instructions, you MUST call this function to update the environment.`),
+		mcp.WithDescription("Updates an environment with new instructions and toolchains."+
+			"If the environment is missing any tools or instructions, you MUST call this function to update the environment."+
+			"You MUST update the environment with any useful information or tools. You will be resumed with no other context than the information provided here"),
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this environment is being updated."),
 		),
@@ -333,7 +339,10 @@ var EnvironmentRunCmdTool = &Tool{
 			mcp.Description("The shell that will be interpreting this command (default: sh)"),
 		),
 		mcp.WithBoolean("background",
-			mcp.Description("Run the command in the background. Must ALWAYS be set for long running command (e.g. http server). Failure to do so will result in the tool being stuck, awaiting for the command to finish."),
+			mcp.Description(`Run the command in the background
+Must ALWAYS be set for long running command (e.g. http server).
+Failure to do so will result in the tool being stuck, awaiting for the command to finish.`,
+			),
 		),
 		mcp.WithBoolean("use_entrypoint",
 			mcp.Description("Use the image entrypoint, if present, by prepending it to the args."),
@@ -373,7 +382,12 @@ var EnvironmentRunCmdTool = &Tool{
 				return nil, err
 			}
 
-			return mcp.NewToolResultText(fmt.Sprintf("Command started in the background. Endpoints are %s\n\nAny changes to the container workdir (%s) WILL NOT be committed to container-use/%s", string(out), environment.Workdir, environment.BranchName())), nil
+			return mcp.NewToolResultText(fmt.Sprintf(`Command started in the background. Endpoints are %s
+
+Any changes to the container workdir (%s) WILL NOT be committed to container-use/%s
+
+Background commands are unaffected by filesystem and any other kind of changes. You need to start a new command for changes to take effect.`,
+				string(out), environment.Workdir, environment.BranchName())), nil
 		}
 
 		stdout, err := environment.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
