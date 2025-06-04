@@ -208,25 +208,41 @@ func Create(ctx context.Context, explanation, source, name string) (*Environment
 	return env, nil
 }
 
-func Open(ctx context.Context, explanation, source, name string) (*Environment, error) {
-	// FIXME(aluzzardi): This is a mess. For now, we're not supporting re-opening existing environment states.
-	return Create(ctx, explanation, source, name)
-	// env := &Environment{}
-	// if err := env.load(source); err != nil {
-	// 	if errors.Is(err, os.ErrNotExist) {
-	// 		return Create(ctx, explanation, source, name)
-	// 	}
-	// 	return nil, err
-	// }
+func Open(ctx context.Context, explanation, source, id string) (*Environment, error) {
+	// FIXME(aluzzardi): DO NOT USE THIS FUNCTION. It's broken.
 
-	// env.Name = name
-	// env.Source = source
-	// worktreePath, err := env.InitializeWorktree(ctx, source)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed intializing worktree: %w", err)
-	// }
-	// env.Worktree = worktreePath
+	name, _, _ := strings.Cut(id, "/")
+	env := &Environment{
+		Name:   name,
+		ID:     id,
+		Source: source,
+	}
+	worktreePath, err := env.InitializeWorktree(ctx, source)
+	if err != nil {
+		return nil, fmt.Errorf("failed intializing worktree: %w", err)
+	}
+	env.Worktree = worktreePath
 
+	if err := env.load(worktreePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Create(ctx, explanation, source, name)
+		}
+		return nil, err
+	}
+
+	container, err := env.buildBase(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := env.apply(ctx, "Open environment", "Open the environment", "", container); err != nil {
+		return nil, err
+	}
+
+	environments[env.ID] = env
+
+	return env, nil
+
+	// FIXME(aluzzardi): BROKEN
 	// if err := env.loadStateFromNotes(ctx, worktreePath); err != nil {
 	// 	return nil, fmt.Errorf("failed to load state from notes: %w", err)
 	// }
@@ -237,9 +253,6 @@ func Open(ctx context.Context, explanation, source, name string) (*Environment, 
 	// if latest := env.History.Latest(); latest != nil {
 	// 	env.container = latest.container
 	// }
-
-	// environments[env.ID] = env
-	// return env, nil
 }
 
 func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error) {
@@ -486,4 +499,12 @@ func (env *Environment) Fork(ctx context.Context, explanation, name string, vers
 	}
 	environments[forkedEnvironment.ID] = forkedEnvironment
 	return forkedEnvironment, nil
+}
+
+func (env *Environment) Terminal(ctx context.Context) error {
+	container := env.container
+	if _, err := container.Terminal(dagger.ContainerTerminalOpts{}).Sync(ctx); err != nil {
+		return err
+	}
+	return nil
 }

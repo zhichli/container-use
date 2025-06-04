@@ -181,7 +181,8 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 		if err := validateName(name); err != nil {
 			return mcp.NewToolResultErrorFromErr("invalid name", err), nil
 		}
-		env, err := environment.Open(ctx, request.GetString("explanation", ""), source, name)
+		// FIXME(aluzzardi): This should call `environment.Open` instead of `environment.Create` but it's currently broken
+		env, err := environment.Create(ctx, request.GetString("explanation", ""), source, name)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to open environment", err), nil
 		}
