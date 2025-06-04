@@ -5,10 +5,11 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"time"
 )
 
 var (
-	logWriter io.Writer
+	logWriter = io.Discard
 )
 
 func parseLogLevel(levelStr string) slog.Level {
@@ -35,6 +36,10 @@ func setupLogger() error {
 			return fmt.Errorf("failed to open log file %s: %w", logFile, err)
 		}
 		writers = append(writers, file)
+	}
+
+	if len(writers) == 0 {
+		fmt.Fprintf(os.Stderr, "%s Logging disabled. Set CU_STDERR_FILE and CU_LOG_LEVEL environment variables\n", time.Now().Format(time.DateTime))
 	}
 
 	logLevel := parseLogLevel(os.Getenv("CU_LOG_LEVEL"))
