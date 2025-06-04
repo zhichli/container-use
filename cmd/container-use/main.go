@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"syscall"
@@ -38,6 +39,8 @@ var (
 		RunE: func(app *cobra.Command, _ []string) error {
 			ctx := app.Context()
 
+			ensureDagger()
+
 			slog.Info("connecting to dagger")
 
 			var err error
@@ -56,6 +59,21 @@ var (
 
 func init() {
 	rootCmd.AddCommand(stdioCmd)
+}
+
+func ensureDagger() {
+	if _, ok := os.LookupEnv("DAGGER_SESSION_TOKEN"); !ok {
+		args := make([]string, len(os.Args)+2)
+		var err error
+		args[0], err = exec.LookPath("dagger")
+		if err != nil {
+			panic("TODO: auto download dagger")
+		}
+		args[1] = "run"
+		copy(args[2:], os.Args)
+		err = syscall.Exec(args[0], args, os.Environ())
+		panic(fmt.Errorf("unexpected reexec failure %v: %w", args, err))
+	}
 }
 
 func main() {
