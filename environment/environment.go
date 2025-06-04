@@ -83,6 +83,7 @@ type Environment struct {
 	Workdir       string   `json:"workdir"`
 	BaseImage     string   `json:"base_image"`
 	SetupCommands []string `json:"setup_commands,omitempty"`
+	Secrets       []string `json:"secrets,omitempty"`
 
 	History History `json:"-"`
 
@@ -249,25 +250,44 @@ func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error
 		From(env.BaseImage).
 		WithWorkdir(env.Workdir)
 
-	for _, command := range env.SetupCommands {
-		container = container.WithExec([]string{"sh", "-c", command})
-	}
-
 	container = container.WithDirectory(".", sourceDir)
 
-	container, err := container.Sync(ctx)
-	if err != nil {
-		var exitErr *dagger.ExecError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("build failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr)
+	for _, secret := range env.Secrets {
+		k, v, found := strings.Cut(secret, "=")
+		if !found {
+			return nil, fmt.Errorf("invalid secret: %s", secret)
 		}
-		return nil, err
+		container = container.WithSecretVariable(k, dag.Secret(v))
+	}
+
+	for _, command := range env.SetupCommands {
+		var err error
+
+		container = container.WithExec([]string{"sh", "-c", command})
+
+		stdout, err := container.Stdout(ctx)
+		if err != nil {
+			var exitErr *dagger.ExecError
+			if errors.As(err, &exitErr) {
+				_ = env.addGitNote(ctx,
+					fmt.Sprintf("$ %s\nexit %d\nstdout: %s\nstderr: %s\n\n",
+						command,
+						exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr,
+					),
+				)
+				return nil, fmt.Errorf("setup command failed with exit code %d.\nstdout: %s\nstderr: %s\n%w\n", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr, err)
+			}
+
+			return nil, fmt.Errorf("failed to execute setup command: %w", err)
+		}
+
+		_ = env.addGitNote(ctx, fmt.Sprintf("$ %s\n%s\n\n", command, stdout))
 	}
 
 	return container, nil
 }
 
-func (env *Environment) Update(ctx context.Context, explanation, instructions, baseImage string, setupCommands []string) error {
+func (env *Environment) Update(ctx context.Context, explanation, instructions, baseImage string, setupCommands, secrets []string) error {
 	if env.isLocked(env.Source) {
 		return fmt.Errorf("Environment is locked, no updates allowed. Try to make do with the current environment or ask a human to remove the lock file (%s)", path.Join(env.Source, configDir, lockFile))
 	}
@@ -275,6 +295,7 @@ func (env *Environment) Update(ctx context.Context, explanation, instructions, b
 	env.Instructions = instructions
 	env.BaseImage = baseImage
 	env.SetupCommands = setupCommands
+	env.Secrets = secrets
 
 	// Re-build the base image from the worktree
 	container, err := env.buildBase(ctx)

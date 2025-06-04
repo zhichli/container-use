@@ -215,6 +215,19 @@ var EnvironmentUpdateTool = &Tool{
 			mcp.Required(),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
+		mcp.WithArray("secrets",
+			mcp.Description(`Secret references in the format of "SECRET_NAME=schema://value
+
+Secrets will be available in the environment as environment variables ($SECRET_NAME).
+
+Supported schemas are:
+- file://PATH: local file path
+- env://NAME: environment variable
+- op://<vault-name>/<item-name>/[section-name/]<field-name>: 1Password secret
+`),
+			mcp.Required(),
+			mcp.Items(map[string]any{"type": "string"}),
+		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		envID, err := request.RequireString("environment_id")
@@ -237,8 +250,12 @@ var EnvironmentUpdateTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
+		secrets, err := request.RequireStringSlice("secrets")
+		if err != nil {
+			return nil, err
+		}
 
-		if err := env.Update(ctx, request.GetString("explanation", ""), instructions, baseImage, setupCommands); err != nil {
+		if err := env.Update(ctx, request.GetString("explanation", ""), instructions, baseImage, setupCommands, secrets); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to update environment", err), nil
 		}
 		return EnvironmentToCallResult(env)
