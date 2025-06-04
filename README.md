@@ -1,36 +1,33 @@
 # container-use
 
-Containerized environments for coding agents
+MCP server to add container superpowers to your AI agent
 
-## Usage
-
-### From Source
+## Installing
 
 ```sh
-go run .
+go build
 ```
 
-### AI Assistant Setup
+Make sure to put `container-use` in your `$PATH`
 
-**Claude Code (MCP)**
+## Agent Integration
+
+Enabling `container-use` requires 2 steps:
+
+1. Adding an MCP configuration for `container-use`
+2. (Optional) Adding a rule so the agent uses containarized environments.
+
+## Claude Code
+
 ```sh
-npx @anthropic-ai/claude-code mcp add container-use -e CU_STDERR_FILE=/tmp/cu.debug.stderr.log -- container-use
+# Add the container-use MCP
+npx @anthropic-ai/claude-code mcp add container-use -e CU_STDERR_FILE=/tmp/cu.debug.stderr.log -- <path to container-use>
+
+# Save the CLAUDE.md file at the root of the repository. Alternatively, merge the instructions into your own CLAUDE.md.
+curl -o CLAUDE.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
 ```
 
-**Rule Files**
-```sh
-# VS Code / GitHub Copilot
-curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
-
-# Cursor  
-curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/cursor.mdc
-
-# Other assistants
-curl -o CLAUDE.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md     # Claude Code
-curl -o .goosehints https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md  # Goose  
-```
-
-#### Goose Configuration
+## Goose
 
 Add this to `~/.config/goose/config.yaml`:
 
@@ -40,19 +37,23 @@ extensions:
     name: container-use
     type: stdio
     enabled: true
-    args:
-    - run
-    - <path to checked out repo>
-    cmd: go
+    cmd: container-use
+    args: []
     envs:
       CU_STDERR_FILE: /tmp/cu.debug.stderr.log
 ```
 
-See the [rules directory](rules/) for configuration instructions for other AI coding assistants.
+## Cursor
 
-## Configuration
+```sh
+curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/cursor.mdc
+```
 
-AI coding assistants need rule files with instructions for working with container-use. See the [rules directory](rules/) for setup guides for your specific assistant.
+## VSCode / GitHub Copilot
+
+```sh
+curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
+```
 
 ## Examples
 
