@@ -23,7 +23,7 @@ var mcpRules string
 func dumpStacks() {
 	buf := make([]byte, 1<<20) // 1MB buffer
 	n := runtime.Stack(buf, true)
-	io.MultiWriter(os.Stderr, globalLog).Write(buf[:n])
+	io.MultiWriter(logWriter, os.Stderr).Write(buf[:n])
 }
 
 func main() {
@@ -44,6 +44,7 @@ func main() {
 	}
 
 	slog.Info("connecting to dagger")
+
 	var err error
 	dag, err = dagger.Connect(context.Background(), dagger.WithLogOutput(logWriter))
 	if err != nil {
