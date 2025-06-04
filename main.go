@@ -17,7 +17,7 @@ import (
 
 var dag *dagger.Client
 
-//go:embed CLAUDE.md
+//go:embed rules/agent.md
 var mcpRules string
 
 func dumpStacks() {
