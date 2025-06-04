@@ -67,8 +67,8 @@ func (h History) Get(version Version) *Revision {
 }
 
 type Environment struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
+	ID       string `json:"-"`
+	Name     string `json:"-"`
 	Source   string `json:"-"`
 	Worktree string `json:"-"`
 
@@ -169,6 +169,11 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 		Instructions: "No instructions found. Please look around the filesystem and update me",
 		Workdir:      "/workdir",
 	}
+	if err := env.load(source); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
 
 	worktreePath, err := env.InitializeWorktree(ctx, source)
 	if err != nil {
@@ -196,7 +201,9 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 }
 
 func OpenEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
-	// FIXME(aluzzardi): This is a mess
+	// FIXME(aluzzardi): This is a mess. For now, we're not supporting re-opening existing environment states.
+	return CreateEnvironment(ctx, explanation, source, name)
+
 	env := &Environment{}
 	if err := env.load(source); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
