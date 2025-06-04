@@ -21,7 +21,7 @@ Enabling `container-use` requires 2 steps:
 
 ```sh
 # Add the container-use MCP
-npx @anthropic-ai/claude-code mcp add container-use -e CU_STDERR_FILE=/tmp/cu.debug.stderr.log -- <path to container-use> stdio
+npx @anthropic-ai/claude-code mcp add container-use -- <path to container-use> stdio
 
 # Save the CLAUDE.md file at the root of the repository. Alternatively, merge the instructions into your own CLAUDE.md.
 curl -o CLAUDE.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
@@ -40,8 +40,7 @@ extensions:
     cmd: container-use
     args:
     - stdio
-    envs:
-      CU_STDERR_FILE: /tmp/cu.debug.stderr.log
+    envs: []
 ```
 
 ## Cursor

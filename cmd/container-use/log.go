@@ -30,13 +30,16 @@ func parseLogLevel(levelStr string) slog.Level {
 func setupLogger() error {
 	var writers []io.Writer
 
-	if logFile := os.Getenv("CU_STDERR_FILE"); logFile != "" {
-		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			return fmt.Errorf("failed to open log file %s: %w", logFile, err)
-		}
-		writers = append(writers, file)
+	logFile := "/tmp/cu.debug.stderr.log"
+	if v, ok := os.LookupEnv("CU_STDERR_FILE"); ok {
+		logFile = v
 	}
+
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file %s: %w", logFile, err)
+	}
+	writers = append(writers, file)
 
 	if len(writers) == 0 {
 		fmt.Fprintf(os.Stderr, "%s Logging disabled. Set CU_STDERR_FILE and CU_LOG_LEVEL environment variables\n", time.Now().Format(time.DateTime))
