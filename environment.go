@@ -75,7 +75,7 @@ type Environment struct {
 	Instructions  string   `json:"-"`
 	Workdir       string   `json:"workdir"`
 	BaseImage     string   `json:"base_image"`
-	SetupCommands []string `json:"setup_commands"`
+	SetupCommands []string `json:"setup_commands,omitempty"`
 
 	History History `json:"-"`
 
@@ -196,6 +196,7 @@ func CreateEnvironment(ctx context.Context, explanation, source, name string) (*
 }
 
 func OpenEnvironment(ctx context.Context, explanation, source, name string) (*Environment, error) {
+	// FIXME(aluzzardi): This is a mess
 	env := &Environment{}
 	if err := env.load(source); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -262,6 +263,7 @@ func (env *Environment) Update(ctx context.Context, explanation, instructions, b
 	env.BaseImage = baseImage
 	env.SetupCommands = setupCommands
 
+	// Re-build the base image from the worktree
 	container, err := env.buildBase(ctx)
 	if err != nil {
 		return err
@@ -306,10 +308,17 @@ func (env *Environment) Run(ctx context.Context, explanation, command, shell str
 	if err != nil {
 		var exitErr *dagger.ExecError
 		if errors.As(err, &exitErr) {
+			_ = env.addGitNote(ctx,
+				fmt.Sprintf("$ %s\nexit %d\nstdout: %s\nstderr: %s\n\n",
+					command,
+					exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr,
+				),
+			)
 			return fmt.Sprintf("command failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr), nil
 		}
 		return "", err
 	}
+	_ = env.addGitNote(ctx, fmt.Sprintf("$ %s\n%s\n\n", command, stdout))
 	if err := env.apply(ctx, "Run "+command, explanation, stdout, newState); err != nil {
 		return "", err
 	}
@@ -355,6 +364,10 @@ func (env *Environment) RunBackground(ctx context.Context, explanation, command,
 		}
 		return nil, err
 	}
+
+	_ = env.addGitNote(ctx,
+		fmt.Sprintf("$ %s &\n\n", command),
+	)
 
 	endpoints := EndpointMappings{}
 	hostForwards := []dagger.PortForward{}

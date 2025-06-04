@@ -16,6 +16,11 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
+const (
+	gitNotesLogRef   = "container-use"
+	gitNotesStateRef = "container-use-state"
+)
+
 // 10MB
 const maxFileSizeForTextCheck = 10 * 1024 * 1024
 
@@ -204,7 +209,7 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return fmt.Errorf("failed to commit worktree changes: %w", err)
 	}
 
-	if err := env.commitStateToNotes(ctx, worktreePath); err != nil {
+	if err := env.commitStateToNotes(ctx); err != nil {
 		return fmt.Errorf("failed to add notes: %w", err)
 	}
 
@@ -218,30 +223,32 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		return err
 	}
 
-	fetchNotes := func() error {
-		_, err := runGitCommand(
-			ctx, localRepoPath, "fetch", "container-use", "refs/notes/container-use:refs/notes/container-use",
-		)
+	if err := env.propagateGitNotes(ctx, gitNotesStateRef); err != nil {
 		return err
-	}
-
-	if err := fetchNotes(); err != nil {
-		if !strings.Contains(err.Error(), "[rejected]") {
-			return fmt.Errorf("failed to fetch notes: %w", err)
-		}
-		// Remove ref and re-try
-		if _, err := runGitCommand(ctx, localRepoPath, "update-ref", "-d", "refs/notes/container-use"); err != nil {
-			return fmt.Errorf("failed to delete notes: %w", err)
-		}
-		if err := fetchNotes(); err != nil {
-			return fmt.Errorf("failed to fetch notes: %w", err)
-		}
 	}
 
 	return nil
 }
 
-func (s *Environment) commitStateToNotes(ctx context.Context, worktreePath string) error {
+func (s *Environment) propagateGitNotes(ctx context.Context, ref string) error {
+	fullRef := fmt.Sprintf("refs/notes/%s", ref)
+	fetch := func() error {
+		_, err := runGitCommand(ctx, s.Source, "fetch", "container-use", fullRef+":"+fullRef)
+		return err
+	}
+
+	if err := fetch(); err != nil {
+		if strings.Contains(err.Error(), "[rejected]") {
+			if _, err := runGitCommand(ctx, s.Source, "update-ref", "-d", fullRef); err == nil {
+				return fetch()
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *Environment) commitStateToNotes(ctx context.Context) error {
 	buff, err := json.MarshalIndent(s.History, "", "  ")
 	if err != nil {
 		return err
@@ -255,15 +262,23 @@ func (s *Environment) commitStateToNotes(ctx context.Context, worktreePath strin
 		return err
 	}
 
-	_, err = runGitCommand(ctx, worktreePath, "notes", "--ref", "container-use", "add", "-f", "-F", f.Name())
+	_, err = runGitCommand(ctx, s.Worktree, "notes", "--ref", gitNotesStateRef, "add", "-f", "-F", f.Name())
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+func (s *Environment) addGitNote(ctx context.Context, note string) error {
+	_, err := runGitCommand(ctx, s.Worktree, "notes", "--ref", "container-use", "append", "-m", note)
+	if err != nil {
+		return err
+	}
+	return s.propagateGitNotes(ctx, gitNotesLogRef)
+}
+
 func (s *Environment) loadStateFromNotes(ctx context.Context, worktreePath string) error {
-	buff, err := runGitCommand(ctx, worktreePath, "notes", "--ref", "container-use", "show")
+	buff, err := runGitCommand(ctx, worktreePath, "notes", "--ref", gitNotesStateRef, "show")
 	if err != nil {
 		if strings.Contains(err.Error(), "no note found") {
 			return nil
