@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"io"
@@ -13,8 +12,6 @@ import (
 
 	"dagger.io/dagger"
 	"github.com/aluzzardi/container-use/mcpserver"
-	"github.com/aluzzardi/container-use/rules"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
 )
 
@@ -37,29 +34,20 @@ var (
 		Use:   "stdio",
 		Short: "Start stdio server",
 		Long:  `Start a server that communicates via standard input/output streams using JSON-RPC messages.`,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(app *cobra.Command, _ []string) error {
+			ctx := app.Context()
+
 			slog.Info("connecting to dagger")
 
 			var err error
-			dag, err = dagger.Connect(context.Background(), dagger.WithLogOutput(logWriter))
+			dag, err = dagger.Connect(ctx, dagger.WithLogOutput(logWriter))
 			if err != nil {
 				slog.Error("Error starting dagger", "error", err)
 				os.Exit(1)
 			}
 			defer dag.Close()
 
-			s := server.NewMCPServer(
-				"Dagger",
-				"1.0.0",
-				server.WithInstructions(rules.AgentRules),
-			)
-
-			for _, t := range mcpserver.Tools {
-				s.AddTool(t.Definition, t.Handler)
-			}
-
-			slog.Info("starting server")
-			return server.ServeStdio(s)
+			return mcpserver.RunStdioServer(ctx)
 		},
 	}
 )

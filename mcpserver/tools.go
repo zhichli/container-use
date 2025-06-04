@@ -17,11 +17,11 @@ type Tool struct {
 	Handler    server.ToolHandlerFunc
 }
 
-var Tools = []*Tool{}
+var tools = []*Tool{}
 
 func registerTool(tool ...*Tool) {
 	for _, t := range tool {
-		Tools = append(Tools, wrapTool(t))
+		tools = append(tools, wrapTool(t))
 	}
 }
 
