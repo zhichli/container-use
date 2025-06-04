@@ -31,12 +31,8 @@ func getRepoPath(repoName string) (string, error) {
 	))
 }
 
-func (env *Environment) BranchName() string {
-	return fmt.Sprintf("%s-%s", env.Name, env.ID[:8])
-}
-
 func (env *Environment) GetWorktreePath() (string, error) {
-	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", env.BranchName()))
+	return homedir.Expand(fmt.Sprintf("~/.config/container-use/worktrees/%s", env.ID))
 }
 
 func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath string) (string, error) {
@@ -59,7 +55,7 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 		return worktreePath, nil
 	}
 
-	slog.Info("Initializing worktree", "container-id", env.ID, "container-name", env.Name, "branchName", env.BranchName())
+	slog.Info("Initializing worktree", "container-id", env.ID, "container-name", env.Name, "id", env.ID)
 	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use")
 	if err != nil {
 		return "", err
@@ -79,14 +75,14 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 	}
 
 	// create worktree, accomodating past partial failures where the branch pushed but the worktree wasn't created
-	_, err = runGitCommand(ctx, cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.BranchName()))
+	_, err = runGitCommand(ctx, cuRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.ID))
 	if err != nil {
-		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", "-b", env.BranchName(), worktreePath, currentBranch)
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", "-b", env.ID, worktreePath, currentBranch)
 		if err != nil {
 			return "", err
 		}
 	} else {
-		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", worktreePath, env.BranchName())
+		_, err = runGitCommand(ctx, cuRepoPath, "worktree", "add", worktreePath, env.ID)
 		if err != nil {
 			return "", err
 		}
@@ -96,15 +92,15 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 		return "", fmt.Errorf("failed to apply uncommitted changes: %w", err)
 	}
 
-	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.BranchName())
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.ID)
 	if err != nil {
 		return "", err
 	}
 
 	// set up remote tracking branch if it's not already there
-	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.BranchName()))
+	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.ID))
 	if err != nil {
-		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", env.BranchName(), fmt.Sprintf("container-use/%s", env.BranchName()))
+		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", env.ID, fmt.Sprintf("container-use/%s", env.ID))
 		if err != nil {
 			return "", err
 		}
@@ -179,12 +175,12 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 		"environment.id", env.ID,
 		"environment.name", env.Name,
 		"workdir", env.Workdir,
-		"branchName", env.BranchName())
+		"id", env.ID)
 	defer slog.Info("Propagating to worktree... (DONE)",
 		"environment.id", env.ID,
 		"environment.name", env.Name,
 		"workdir", env.Workdir,
-		"branchName", env.BranchName())
+		"id", env.ID)
 
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
@@ -219,7 +215,7 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 	}
 
 	slog.Info("Fetching container-use remote in source repository")
-	if _, err := runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.BranchName()); err != nil {
+	if _, err := runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.ID); err != nil {
 		return err
 	}
 

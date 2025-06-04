@@ -7,12 +7,49 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/aluzzardi/container-use/environment"
 	"github.com/aluzzardi/container-use/rules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+func validateName(name string) error {
+	if name == "" {
+		return errors.New("name cannot be empty")
+	}
+
+	if strings.Contains(name, " ") {
+		return errors.New("name cannot contain spaces, use hyphens (-) instead")
+	}
+
+	if strings.Contains(name, "_") {
+		return errors.New("name cannot contain underscores, use hyphens (-) instead")
+	}
+
+	invalidChars := []string{"~", "^", ":", "?", "*", "[", "\\", "/", "\"", "<", ">", "|", "@", "{", "}", "..", "\t", "\n", "\r"}
+	for _, char := range invalidChars {
+		if strings.Contains(name, char) {
+			return fmt.Errorf("name cannot contain '%s'", char)
+		}
+	}
+
+	if strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") ||
+		strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
+		return errors.New("name cannot start or end with hyphen or dot")
+	}
+
+	if strings.HasSuffix(name, ".lock") {
+		return errors.New("name cannot end with '.lock'")
+	}
+
+	if len(name) > 100 {
+		return errors.New("name cannot exceed 244 bytes")
+	}
+
+	return nil
+}
 
 type Tool struct {
 	Definition mcp.Tool
@@ -101,9 +138,9 @@ func EnvironmentToCallResult(env *environment.Environment) (*mcp.CallToolResult,
 		BaseImage:        env.BaseImage,
 		SetupCommands:    env.SetupCommands,
 		Workdir:          env.Workdir,
-		Branch:           env.BranchName(),
-		TrackingBranch:   fmt.Sprintf("container-use/%s", env.BranchName()),
-		CheckoutCommand:  fmt.Sprintf("git checkout %s", env.BranchName()),
+		Branch:           env.ID,
+		TrackingBranch:   fmt.Sprintf("container-use/%s", env.ID),
+		CheckoutCommand:  fmt.Sprintf("git checkout %s", env.ID),
 		HostWorktreePath: worktreePath,
 	}
 	out, err := json.Marshal(resp)
@@ -128,7 +165,7 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 			mcp.Required(),
 		),
 		mcp.WithString("name",
-			mcp.Description("Name of the environment."), //  This can be a local folder (e.g. file://) or a URL to a git repository (e.g. https://github.com/user/repo.git, git@github.com:user/repo.git)"),
+			mcp.Description("Name of the environment. Use hyphens (-) to separate words, no spaces or underscores allowed (e.g., 'my-web-app' not 'my web app' or 'my_web_app')"),
 			mcp.Required(),
 		),
 	),
@@ -140,6 +177,9 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 		name, err := request.RequireString("name")
 		if err != nil {
 			return nil, err
+		}
+		if err := validateName(name); err != nil {
+			return mcp.NewToolResultErrorFromErr("invalid name", err), nil
 		}
 		env, err := environment.Open(ctx, request.GetString("explanation", ""), source, name)
 		if err != nil {
@@ -236,7 +276,7 @@ var EnvironmentForkTool = &Tool{
 			mcp.Description("Version of the environment to fork. Defaults to latest version."),
 		),
 		mcp.WithString("name",
-			mcp.Description("Name of the new environment."),
+			mcp.Description("Name of the new environment. Use hyphens (-) to separate words, no spaces or underscores allowed (e.g., 'my-forked-app' not 'my forked app' or 'my_forked_app')"),
 			mcp.Required(),
 		),
 	),
@@ -254,6 +294,9 @@ var EnvironmentForkTool = &Tool{
 		name, err := request.RequireString("name")
 		if err != nil {
 			return nil, err
+		}
+		if err := validateName(name); err != nil {
+			return mcp.NewToolResultErrorFromErr("invalid name", err), nil
 		}
 
 		var version *environment.Version
@@ -405,14 +448,14 @@ Failure to do so will result in the tool being stuck, awaiting for the command t
 Any changes to the container workdir (%s) WILL NOT be committed to container-use/%s
 
 Background commands are unaffected by filesystem and any other kind of changes. You need to start a new command for changes to take effect.`,
-				string(out), env.Workdir, env.BranchName())), nil
+				string(out), env.Workdir, env.ID)), nil
 		}
 
 		stdout, err := env.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("%s\n\nAny changes to the container workdir (%s) have been committed and pushed to container-use/%s", stdout, env.Workdir, env.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%s\n\nAny changes to the container workdir (%s) have been committed and pushed to container-use/%s", stdout, env.Workdir, env.ID)), nil
 	},
 }
 
@@ -722,7 +765,7 @@ var EnvironmentFileWriteTool = &Tool{
 			return mcp.NewToolResultErrorFromErr("failed to write file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully, changes pushed to container-use/%s", targetFile, env.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully, changes pushed to container-use/%s", targetFile, env.ID)), nil
 	},
 }
 
@@ -760,7 +803,7 @@ var EnvironmentFileDeleteTool = &Tool{
 			return mcp.NewToolResultErrorFromErr("failed to delete file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully, changes pushed to container-use/%s", targetFile, env.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully, changes pushed to container-use/%s", targetFile, env.ID)), nil
 	},
 }
 
