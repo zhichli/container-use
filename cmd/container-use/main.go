@@ -12,13 +12,12 @@ import (
 	"syscall"
 
 	"dagger.io/dagger"
+	"github.com/aluzzardi/container-use/mcpserver"
+	"github.com/aluzzardi/container-use/rules"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 var dag *dagger.Client
-
-//go:embed rules/agent.md
-var mcpRules string
 
 func dumpStacks() {
 	buf := make([]byte, 1<<20) // 1MB buffer
@@ -56,10 +55,10 @@ func main() {
 	s := server.NewMCPServer(
 		"Dagger",
 		"1.0.0",
-		server.WithInstructions(mcpRules),
+		server.WithInstructions(rules.AgentRules),
 	)
 
-	for _, t := range tools {
+	for _, t := range mcpserver.Tools {
 		s.AddTool(t.Definition, t.Handler)
 	}
 

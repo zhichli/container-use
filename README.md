@@ -5,7 +5,7 @@ MCP server to add container superpowers to your AI agent
 ## Installing
 
 ```sh
-go build
+go build ./cmd/container-use
 ```
 
 Make sure to put `container-use` in your `$PATH`

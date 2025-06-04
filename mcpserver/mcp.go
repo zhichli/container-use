@@ -1,4 +1,4 @@
-package main
+package mcpserver
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/aluzzardi/container-use/environment"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -16,11 +17,11 @@ type Tool struct {
 	Handler    server.ToolHandlerFunc
 }
 
-var tools = []*Tool{}
+var Tools = []*Tool{}
 
 func RegisterTool(tool ...*Tool) {
 	for _, t := range tool {
-		tools = append(tools, wrapTool(t))
+		Tools = append(Tools, wrapTool(t))
 	}
 }
 
@@ -72,7 +73,7 @@ type EnvironmentResponse struct {
 	HostWorktreePath string   `json:"host_worktree_path"`
 }
 
-func EnvironmentToCallResult(env *Environment) (*mcp.CallToolResult, error) {
+func EnvironmentToCallResult(env *environment.Environment) (*mcp.CallToolResult, error) {
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
 		return mcp.NewToolResultErrorFromErr("failed to get worktree", err), nil
@@ -123,7 +124,7 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 		if err != nil {
 			return nil, err
 		}
-		env, err := OpenEnvironment(ctx, request.GetString("explanation", ""), source, name)
+		env, err := environment.OpenEnvironment(ctx, request.GetString("explanation", ""), source, name)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to open environment", err), nil
 		}
@@ -159,13 +160,13 @@ var EnvironmentUpdateTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 		instructions, err := request.RequireString("instructions")
 		if err != nil {
@@ -180,10 +181,10 @@ var EnvironmentUpdateTool = &Tool{
 			return nil, err
 		}
 
-		if err := environment.Update(ctx, request.GetString("explanation", ""), instructions, baseImage, setupCommands); err != nil {
+		if err := env.Update(ctx, request.GetString("explanation", ""), instructions, baseImage, setupCommands); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to update environment", err), nil
 		}
-		return EnvironmentToCallResult(environment)
+		return EnvironmentToCallResult(env)
 	},
 }
 
@@ -195,8 +196,8 @@ var EnvironmentListTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environments := ListEnvironments()
-		out, err := json.Marshal(environments)
+		envs := environment.ListEnvironments()
+		out, err := json.Marshal(envs)
 		if err != nil {
 			return nil, err
 		}
@@ -223,14 +224,14 @@ var EnvironmentForkTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
 
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		name, err := request.RequireString("name")
@@ -238,12 +239,12 @@ var EnvironmentForkTool = &Tool{
 			return nil, err
 		}
 
-		var version *Version
-		if v, ok := request.GetArguments()["version"].(Version); ok {
+		var version *environment.Version
+		if v, ok := request.GetArguments()["version"].(environment.Version); ok {
 			version = &v
 		}
 
-		fork, err := environment.Fork(ctx, request.GetString("explanation", ""), name, version)
+		fork, err := env.Fork(ctx, request.GetString("explanation", ""), name, version)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to fork environment", err), nil
 		}
@@ -264,17 +265,17 @@ var EnvironmentHistoryTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
 
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
-		history := environment.History
+		history := env.History
 		out, err := json.Marshal(history)
 		if err != nil {
 			return nil, err
@@ -299,14 +300,14 @@ var EnvironmentRevertTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
 
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		version, err := request.RequireInt("version")
@@ -314,7 +315,7 @@ var EnvironmentRevertTool = &Tool{
 			return nil, err
 		}
 
-		if err := environment.Revert(ctx, request.GetString("explanation", ""), Version(version)); err != nil {
+		if err := env.Revert(ctx, request.GetString("explanation", ""), environment.Version(version)); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to revert environment", err), nil
 		}
 
@@ -353,13 +354,13 @@ Failure to do so will result in the tool being stuck, awaiting for the command t
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 		command := request.GetString("command", "")
 		shell := request.GetString("shell", "sh")
@@ -372,7 +373,7 @@ Failure to do so will result in the tool being stuck, awaiting for the command t
 					ports = append(ports, int(port.(float64)))
 				}
 			}
-			endpoints, err := environment.RunBackground(ctx, request.GetString("explanation", ""), command, shell, ports, request.GetBool("use_entrypoint", false))
+			endpoints, err := env.RunBackground(ctx, request.GetString("explanation", ""), command, shell, ports, request.GetBool("use_entrypoint", false))
 			if err != nil {
 				return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 			}
@@ -387,14 +388,14 @@ Failure to do so will result in the tool being stuck, awaiting for the command t
 Any changes to the container workdir (%s) WILL NOT be committed to container-use/%s
 
 Background commands are unaffected by filesystem and any other kind of changes. You need to start a new command for changes to take effect.`,
-				string(out), environment.Workdir, environment.BranchName())), nil
+				string(out), env.Workdir, env.BranchName())), nil
 		}
 
-		stdout, err := environment.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
+		stdout, err := env.Run(ctx, request.GetString("explanation", ""), command, shell, request.GetBool("use_entrypoint", false))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to run command", err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("%s\n\nAny changes to the container workdir (%s) have been committed and pushed to container-use/%s", stdout, environment.Workdir, environment.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%s\n\nAny changes to the container workdir (%s) have been committed and pushed to container-use/%s", stdout, env.Workdir, env.BranchName())), nil
 	},
 }
 
@@ -414,19 +415,19 @@ var EnvironmentSetEnvTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 		envs, err := request.RequireStringSlice("envs")
 		if err != nil {
 			return nil, err
 		}
-		if err := environment.SetEnv(ctx, request.GetString("explanation", ""), envs); err != nil {
+		if err := env.SetEnv(ctx, request.GetString("explanation", ""), envs); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to set environment variables", err), nil
 		}
 		return mcp.NewToolResultText("environment variables set successfully"), nil
@@ -453,13 +454,13 @@ var EnvironmentUploadTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		source, err := request.RequireString("source")
@@ -471,7 +472,7 @@ var EnvironmentUploadTool = &Tool{
 			return nil, err
 		}
 
-		if err := environment.Upload(ctx, request.GetString("explanation", ""), source, target); err != nil {
+		if err := env.Upload(ctx, request.GetString("explanation", ""), source, target); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to upload files", err), nil
 		}
 
@@ -499,13 +500,13 @@ var EnvironmentDownloadTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		source, err := request.RequireString("source")
@@ -517,7 +518,7 @@ var EnvironmentDownloadTool = &Tool{
 			return nil, errors.New("target must be a string")
 		}
 
-		if err := environment.Download(ctx, source, target); err != nil {
+		if err := env.Download(ctx, source, target); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to download files", err), nil
 		}
 
@@ -545,13 +546,13 @@ var EnvironmentDiffTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		source, err := request.RequireString("source")
@@ -563,7 +564,7 @@ var EnvironmentDiffTool = &Tool{
 			return nil, errors.New("target must be a string")
 		}
 
-		diff, err := environment.RemoteDiff(ctx, source, target)
+		diff, err := env.RemoteDiff(ctx, source, target)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to diff", err), nil
 		}
@@ -597,13 +598,13 @@ var EnvironmentFileReadTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		targetFile, err := request.RequireString("target_file")
@@ -614,7 +615,7 @@ var EnvironmentFileReadTool = &Tool{
 		startLineOneIndexed := request.GetInt("start_line_one_indexed", 0)
 		endLineOneIndexedInclusive := request.GetInt("end_line_one_indexed_inclusive", 0)
 
-		fileContents, err := environment.FileRead(ctx, targetFile, shouldReadEntireFile, startLineOneIndexed, endLineOneIndexedInclusive)
+		fileContents, err := env.FileRead(ctx, targetFile, shouldReadEntireFile, startLineOneIndexed, endLineOneIndexedInclusive)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to read file", err), nil
 		}
@@ -639,13 +640,13 @@ var EnvironmentFileListTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		path, err := request.RequireString("path")
@@ -653,7 +654,7 @@ var EnvironmentFileListTool = &Tool{
 			return nil, err
 		}
 
-		out, err := environment.FileList(ctx, path)
+		out, err := env.FileList(ctx, path)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to list directory", err), nil
 		}
@@ -682,13 +683,13 @@ var EnvironmentFileWriteTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		targetFile, err := request.RequireString("target_file")
@@ -700,11 +701,11 @@ var EnvironmentFileWriteTool = &Tool{
 			return nil, err
 		}
 
-		if err := environment.FileWrite(ctx, request.GetString("explanation", ""), targetFile, contents); err != nil {
+		if err := env.FileWrite(ctx, request.GetString("explanation", ""), targetFile, contents); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to write file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully, changes pushed to container-use/%s", targetFile, environment.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s written successfully, changes pushed to container-use/%s", targetFile, env.BranchName())), nil
 	},
 }
 
@@ -724,13 +725,13 @@ var EnvironmentFileDeleteTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		targetFile, err := request.RequireString("target_file")
@@ -738,11 +739,11 @@ var EnvironmentFileDeleteTool = &Tool{
 			return nil, err
 		}
 
-		if err := environment.FileDelete(ctx, request.GetString("explanation", ""), targetFile); err != nil {
+		if err := env.FileDelete(ctx, request.GetString("explanation", ""), targetFile); err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to delete file", err), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully, changes pushed to container-use/%s", targetFile, environment.BranchName())), nil
+		return mcp.NewToolResultText(fmt.Sprintf("file %s deleted successfully, changes pushed to container-use/%s", targetFile, env.BranchName())), nil
 	},
 }
 
@@ -768,13 +769,13 @@ var EnvironmentRevisionDiffTool = &Tool{
 		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		environmentID, err := request.RequireString("environment_id")
+		envID, err := request.RequireString("environment_id")
 		if err != nil {
 			return nil, err
 		}
-		environment := GetEnvironment(environmentID)
-		if environment == nil {
-			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", environmentID)), nil
+		env := environment.GetEnvironment(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
 		}
 
 		path := request.GetString("path", "")
@@ -782,9 +783,9 @@ var EnvironmentRevisionDiffTool = &Tool{
 		if err != nil {
 			return nil, err
 		}
-		toVersion := request.GetInt("to_version", int(environment.History.LatestVersion()))
+		toVersion := request.GetInt("to_version", int(env.History.LatestVersion()))
 
-		diff, err := environment.RevisionDiff(ctx, path, Version(fromVersion), Version(toVersion))
+		diff, err := env.RevisionDiff(ctx, path, environment.Version(fromVersion), environment.Version(toVersion))
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to diff", err), nil
 		}
