@@ -169,7 +169,7 @@ var environments = map[string]*Environment{}
 
 func Create(ctx context.Context, explanation, source, name string) (*Environment, error) {
 	env := &Environment{
-		ID:           fmt.Sprintf("%s-%s", name, petname.Generate(2, "-")),
+		ID:           fmt.Sprintf("%s/%s", name, petname.Generate(2, "-")),
 		Name:         name,
 		Source:       source,
 		BaseImage:    defaultImage,
@@ -457,7 +457,7 @@ func (env *Environment) Fork(ctx context.Context, explanation, name string, vers
 	}
 
 	forkedEnvironment := &Environment{
-		ID:   fmt.Sprintf("%s-%s", name, petname.Generate(2, "-")),
+		ID:   fmt.Sprintf("%s/%s", name, petname.Generate(2, "-")),
 		Name: name,
 	}
 	if err := forkedEnvironment.apply(ctx, "Fork from "+env.Name, explanation, "", revision.container); err != nil {
