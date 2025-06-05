@@ -13,5 +13,3 @@
 3. Upgrade those packages
    - Perform the updates in the sandbox.
    - Make sure the code still builds after updating.
-   - Show me a history of the sandbox along with a diff after the updates are complete.
-   - Export a `deps-update.patch` locally
