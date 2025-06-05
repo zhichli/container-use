@@ -14,7 +14,7 @@
   </p>
 </div>
 
-**Container Use** lets each of your coding agents have their own containerized environment. You can finally run agents in parallel safely, experiment without risk, jump in to debug when they get stuck, and use any model or IDE you want without getting locked into one platform. Go from babysitting one agent at a time to enabling multiple agents to work safely and independently with your preferred stack.
+**Container Use** lets each of your coding agents have their own containerized environment. Go from babysitting one agent at a time to enabling multiple agents to work safely and independently with your preferred stack.
 
 <p align='center'>
     <img src='./_assets/screencast.svg' width='700' alt='container-use demo'>
