@@ -26,7 +26,7 @@ func dumpStacks() {
 
 var (
 	rootCmd = &cobra.Command{
-		Use:   "container-use",
+		Use:   "cu",
 		Short: "Container Use",
 		Long:  `MCP server to add container superpowers to your AI agent.`,
 	}
