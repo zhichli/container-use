@@ -263,8 +263,6 @@ func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error
 		From(env.BaseImage).
 		WithWorkdir(env.Workdir)
 
-	container = container.WithDirectory(".", sourceDir)
-
 	for _, secret := range env.Secrets {
 		k, v, found := strings.Cut(secret, "=")
 		if !found {
@@ -296,6 +294,8 @@ func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error
 
 		_ = env.addGitNote(ctx, fmt.Sprintf("$ %s\n%s\n\n", command, stdout))
 	}
+
+	container = container.WithDirectory(".", sourceDir)
 
 	return container, nil
 }
