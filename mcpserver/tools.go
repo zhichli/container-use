@@ -907,6 +907,6 @@ var EnvironmentCheckpointTool = &Tool{
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr("failed to checkpoint", err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Checkpoint pushed to %q. The entrypoint is set to `sh`, keep that in mind when giving commands to the container.", endpoint)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Checkpoint pushed to %q. You MUST use the full content addressed (@sha256:...) reference in `docker` commands. The entrypoint is set to `sh`, keep that in mind when giving commands to the container.", endpoint)), nil
 	},
 }
