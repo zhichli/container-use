@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/aluzzardi/container-use/environment"
-	"github.com/aluzzardi/container-use/rules"
+	"github.com/dagger/container-use/environment"
+	"github.com/dagger/container-use/rules"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )

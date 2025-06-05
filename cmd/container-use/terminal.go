@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"dagger.io/dagger"
-	"github.com/aluzzardi/container-use/environment"
+	"github.com/dagger/container-use/environment"
 	"github.com/spf13/cobra"
 )
 

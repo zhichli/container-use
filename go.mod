@@ -1,4 +1,4 @@
-module github.com/aluzzardi/container-use
+module github.com/dagger/container-use
 
 go 1.24.3
 

@@ -11,8 +11,8 @@ import (
 	"syscall"
 
 	"dagger.io/dagger"
-	"github.com/aluzzardi/container-use/environment"
-	"github.com/aluzzardi/container-use/mcpserver"
+	"github.com/dagger/container-use/environment"
+	"github.com/dagger/container-use/mcpserver"
 	"github.com/spf13/cobra"
 )
 

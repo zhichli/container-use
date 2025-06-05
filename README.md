@@ -24,7 +24,7 @@ Enabling `container-use` requires 2 steps:
 npx @anthropic-ai/claude-code mcp add container-use -- <path to container-use> stdio
 
 # Save the CLAUDE.md file at the root of the repository. Alternatively, merge the instructions into your own CLAUDE.md.
-curl -o CLAUDE.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
+curl -o CLAUDE.md https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md
 ```
 
 ### Goose
@@ -46,13 +46,13 @@ extensions:
 ### Cursor
 
 ```sh
-curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/cursor.mdc
+curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/dagger/container-use/main/rules/cursor.mdc
 ```
 
 ### VSCode / GitHub Copilot
 
 ```sh
-curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/aluzzardi/container-use/main/rules/agent.md
+curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md
 ```
 
 ## Examples
