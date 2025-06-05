@@ -40,7 +40,7 @@ It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor
 make
 ```
 
-The make command above will put `container-use` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
+The make command above will put `cu` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
 
 ## Agent Integration
 
@@ -53,7 +53,7 @@ Enabling `container-use` requires 2 steps:
 
 ```sh
 # Add the container-use MCP
-npx @anthropic-ai/claude-code mcp add container-use -- <path to container-use> stdio
+npx @anthropic-ai/claude-code mcp add container-use -- <path to cu> stdio
 
 # Save the CLAUDE.md file at the root of the repository. Alternatively, merge the instructions into your own CLAUDE.md.
 curl -o CLAUDE.md https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md
@@ -69,7 +69,7 @@ extensions:
     name: container-use
     type: stdio
     enabled: true
-    cmd: container-use
+    cmd: cu
     args:
     - stdio
     envs: []
@@ -112,5 +112,5 @@ goose run -i ./examples/hello_world.md -s
 Your agents will automatically commit to a container-use remote on your local filesystem. You can watch the progress of your agents in real time by running:
 
 ```console
-container-use watch
+cu watch
 ```
