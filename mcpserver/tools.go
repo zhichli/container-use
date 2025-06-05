@@ -112,6 +112,8 @@ func init() {
 		EnvironmentFileWriteTool,
 		EnvironmentFileDeleteTool,
 		// EnvironmentRevisionDiffTool,
+
+		EnvironmentCheckpointTool,
 	)
 }
 
@@ -869,5 +871,42 @@ var EnvironmentRevisionDiffTool = &Tool{
 		}
 
 		return mcp.NewToolResultText(diff), nil
+	},
+}
+
+var EnvironmentCheckpointTool = &Tool{
+	Definition: mcp.NewTool("environment_checkpoint",
+		mcp.WithDescription("Checkpoints an environment in its current state as a container."),
+		mcp.WithString("explanation",
+			mcp.Description("One sentence explanation for why this checkpoint is being created."),
+		),
+		mcp.WithString("environment_id",
+			mcp.Description("The ID of the environment for this command. Must call `environment_create` first."),
+			mcp.Required(),
+		),
+		mcp.WithString("destination",
+			mcp.Description("Container image destination to checkpoint to (e.g. registry.com/user/image:tag"),
+			mcp.Required(),
+		),
+	),
+	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		envID, err := request.RequireString("environment_id")
+		if err != nil {
+			return nil, err
+		}
+		env := environment.Get(envID)
+		if env == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("environment %s not found", envID)), nil
+		}
+		destination, err := request.RequireString("destination")
+		if err != nil {
+			return nil, err
+		}
+
+		endpoint, err := env.Checkpoint(ctx, destination)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("failed to checkpoint", err), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Checkpoint pushed to %q. The entrypoint is set to `sh`, keep that in mind when giving commands to the container.", endpoint)), nil
 	},
 }

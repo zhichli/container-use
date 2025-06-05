@@ -508,3 +508,8 @@ func (env *Environment) Terminal(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (env *Environment) Checkpoint(ctx context.Context, target string) (string, error) {
+	image := env.container.WithEntrypoint([]string{"sh"})
+	return image.Publish(ctx, target)
+}
