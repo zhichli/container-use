@@ -15,6 +15,11 @@
   </p>
 </div>
 
+<p align='center'>
+    <img src='./_assets/screencast.svg' width='600' alt='container-use demo'>
+</p>
+
+
 ## Installing
 
 ```sh
