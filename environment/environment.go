@@ -503,7 +503,7 @@ func (env *Environment) Fork(ctx context.Context, explanation, name string, vers
 
 func (env *Environment) Terminal(ctx context.Context) error {
 	container := env.container
-	if _, err := container.Terminal(dagger.ContainerTerminalOpts{}).Sync(ctx); err != nil {
+	if _, err := container.Terminal(dagger.ContainerTerminalOpts{Cmd: []string{"/bin/bash"}}).Sync(ctx); err != nil {
 		return err
 	}
 	return nil
