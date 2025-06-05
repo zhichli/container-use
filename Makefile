@@ -1,10 +1,12 @@
-all: container-use
+.PHONY: all
+all: cu
 
-container-use:
+.PHONY: cu
+cu:
 	@which docker >/dev/null || ( echo "Please follow instructions to install Docker at https://docs.docker.com/get-started/get-docker/"; exit 1 )
 	@docker build --platform local -o . .
-	@ls container-use
+	@ls cu
 
 .PHONY: clean
 clean:
-	rm -f container-use
+	rm -f cu
