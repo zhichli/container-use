@@ -1,8 +1,7 @@
 <div align="center">
-
   <img src="./_assets/logo.png" align="center" alt="container-use" />
   <h2 align="center">container-use</h2>
-  <p align="center">Containerized environments for any coding agent 🤖</p>
+  <p align="center">Containerized environments for coding agents. (📦🤖) (📦🤖) (📦🤖)</p>
 
   <p align="center">
     <img src="https://img.shields.io/badge/stability-experimental-orange.svg" alt="Experimental" />
@@ -15,15 +14,30 @@
   </p>
 </div>
 
+**Container Use** lets each of your coding agents have their own containerized environment. Go from babysitting one agent at a time to enabling multiple agents to work safely and independently with your preferred stack.
+
 <p align='center'>
-    <img src='./_assets/screencast.svg' width='600' alt='container-use demo'>
+    <img src='./_assets/screencast.svg' width='700' alt='container-use demo'>
 </p>
 
+It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor, and other MCP-compatible agents.
+
+* 📦 **Isolated Environments**: Each agent gets a fresh container in its own git branch - run multiple agents without conflicts, experiment safely, discard failures instantly.
+* 👀 **Real-time Visibility**: See complete command history and logs of what agents actually did, not just what they claim.
+* 🚁 **Direct Intervention**: Drop into any agent's terminal to see their state and take control when they get stuck.
+* 🎮 **Environment Control**: Standard git workflow - just `git checkout <branch_name>` to review any agent's work.
+* 🌎 **Universal Compatibility**: Works with any agent, model, or infrastructure - no vendor lock-in.
+
+---
+
+🦺 This project is in early development and actively evolving. Expect rough edges, breaking changes, and incomplete documentation - but also expect rapid iteration and responsiveness to feedback.
+
+---
 
 ## Installing
 
 ```sh
-go build ./cmd/container-use
+make
 ```
 
 Make sure to put `container-use` in your `$PATH`
@@ -35,7 +49,7 @@ Enabling `container-use` requires 2 steps:
 1. Adding an MCP configuration for `container-use`
 2. (Optional) Adding a rule so the agent uses containarized environments.
 
-### Claude Code
+### [Claude Code](https://docs.anthropic.com/en/docs/claude-code/tutorials#set-up-model-context-protocol-mcp)
 
 ```sh
 # Add the container-use MCP
@@ -45,7 +59,7 @@ npx @anthropic-ai/claude-code mcp add container-use -- <path to container-use> s
 curl -o CLAUDE.md https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md
 ```
 
-### Goose
+### [goose](https://block.github.io/goose/docs/getting-started/using-extensions#mcp-servers)
 
 Add this to `~/.config/goose/config.yaml`:
 
@@ -61,13 +75,13 @@ extensions:
     envs: []
 ```
 
-### Cursor
+### [Cursor](https://docs.cursor.com/context/model-context-protocol)
 
 ```sh
 curl --create-dirs -o .cursor/rules/container-use.mdc https://raw.githubusercontent.com/dagger/container-use/main/rules/cursor.mdc
 ```
 
-### VSCode / GitHub Copilot
+### [VSCode](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) / [GitHub Copilot](https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp)
 
 ```sh
 curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md
@@ -81,10 +95,16 @@ curl --create-dirs -o .github/copilot-instructions.md https://raw.githubusercont
 | [parallel.md](examples/parallel.md) | Creates and serves two variations of a hello world app (Flask and FastAPI) on different URLs |
 | [security.md](examples/security.md) | Security scanning example that checks for updates/vulnerabilities in the repository, applies updates, verifies builds still work, and generates patch file |
 
-Run with goose:
+### Run with [Claude Code](https://www.anthropic.com/claude-code)
 
 ```console
-goose run -i ./examples/security.md -s
+cat ./examples/hello_world.md | claude
+```
+
+### Run with [goose](https://block.github.io/goose/)
+
+```console
+goose run -i ./examples/hello_world.md -s
 ```
 
 ## Watching your agents work
