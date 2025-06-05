@@ -1,8 +1,19 @@
-<p align="center">
+<div align="center">
+
   <img src="./_assets/logo.png" align="center" alt="container-use" />
   <h2 align="center">container-use</h2>
   <p align="center">Containerized environments for any coding agent 🤖</p>
-</p>
+
+  <p align="center">
+    <img src="https://img.shields.io/badge/stability-experimental-orange.svg" alt="Experimental" />
+    <a href="https://opensource.org/licenses/Apache-2.0">
+      <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
+    </a>
+    <a href="https://discord.gg/UhXqKz7SRM">
+      <img src="https://img.shields.io/discord/707636530424053791?logo=discord&logoColor=white&label=Discord&color=7289DA" alt="Discord">
+    </a>
+  </p>
+</div>
 
 ## Installing
 
