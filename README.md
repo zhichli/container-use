@@ -40,7 +40,7 @@ It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor
 make
 ```
 
-Make sure to put `container-use` in your `$PATH`
+The make command above will put `container-use` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
 
 ## Agent Integration
 
