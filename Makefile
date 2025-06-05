@@ -26,7 +26,7 @@ find-path:
 
 .PHONY: install
 install: build
-	@DEST=$$(make find-path | tail -n 1); \
+	@DEST=$$(make -s find-path | tail -n 1); \
 	if [ -z "$$DEST" ]; then \
 		echo "No writable directory found in \$PATH"; exit 1; \
 	fi; \
