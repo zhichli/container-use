@@ -22,11 +22,15 @@
 
 It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor, and other MCP-compatible agents.
 
-* ✅ **Isolated Environments**: Each agent gets a fresh container in its own git branch - run multiple agents without conflicts, experiment safely, discard failures instantly.
-* ✅ **Real-time Visibility**: See complete command history and logs of what agents actually did, not just what they claim.
-* ✅ **Direct Intervention**: Drop into any agent's terminal to see their state and take control when they get stuck.
-* ✅ **Environment Control**: Standard git workflow - just `git checkout <branch_name>` to review any agent's work.
-* ✅ **Universal Compatibility**: Works with any agent, model, or infrastructure - no vendor lock-in.
+📦 **Isolated Environments**: Each agent gets a fresh container in its own git branch - run multiple agents without conflicts, experiment safely, discard failures instantly.
+
+👀 **Real-time Visibility**: See complete command history and logs of what agents actually did, not just what they claim.
+
+🚁 **Direct Intervention**: Drop into any agent's terminal to see their state and take control when they get stuck.
+
+🎮 **Environment Control**: Standard git workflow - just `git checkout <branch_name>` to review any agent's work.
+
+🌎 **Universal Compatibility**: Works with any agent, model, or infrastructure - no vendor lock-in.
 
 ## Installing
 
