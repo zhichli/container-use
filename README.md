@@ -2,7 +2,7 @@
 
   <img src="./_assets/logo.png" align="center" alt="container-use" />
   <h2 align="center">container-use</h2>
-  <p align="center">Containerized environments for any coding agent 🤖</p>
+  <p align="center">Containerized environments for coding agents. (📦🤖) (📦🤖) (📦🤖)</p>
 
   <p align="center">
     <img src="https://img.shields.io/badge/stability-experimental-orange.svg" alt="Experimental" />
@@ -15,10 +15,18 @@
   </p>
 </div>
 
+**Container Use** lets each of your coding agents have their own containerized environment. You can finally run agents in parallel safely, experiment without risk, jump in to debug when they get stuck, and use any model or IDE you want without getting locked into one platform. Go from babysitting one agent at a time to enabling multiple agents to work safely and independently with your preferred stack.
+
 <p align='center'>
-    <img src='./_assets/screencast.svg' width='600' alt='container-use demo'>
+    <img src='./_assets/screencast.svg' width='700' alt='container-use demo'>
 </p>
 
+It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor, and other MCP-compatible agents.
+* ✅ **Isolated Environments**: Each agent gets a fresh container in its own git branch - run multiple agents without conflicts, experiment safely, discard failures instantly.
+* * ✅ **Real-time Visibility**: See complete command history and logs of what agents actually did, not just what they claim.
+* * ✅ **Direct Intervention**: Drop into any agent's terminal to see their state and take control when they get stuck.
+* * ✅ **Environment Control**: Standard git workflow - just `git checkout <branch_name>` to review any agent's work.
+* * ✅ **Universal Compatibility**: Works with any agent, model, or infrastructure - no vendor lock-in.
 
 ## Installing
 
