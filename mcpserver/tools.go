@@ -82,9 +82,11 @@ func registerTool(tool ...*Tool) {
 func wrapTool(t *Tool) *Tool {
 	return &Tool{
 		Definition: t.Definition,
-		Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		Handler: func(ctx context.Context, request mcp.CallToolRequest) (_ *mcp.CallToolResult, rerr error) {
 			slog.Info("Calling tool", "tool", t.Definition.Name)
-			defer slog.Info("Tool call completed", "tool", t.Definition.Name)
+			defer func() {
+				slog.Info("Tool call completed", "tool", t.Definition.Name, "err", rerr)
+			}()
 			return t.Handler(ctx, request)
 		},
 	}

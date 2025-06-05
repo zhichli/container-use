@@ -150,9 +150,11 @@ func InitializeLocalRemote(ctx context.Context, localRepoPath string) (string, e
 	return cuRepoPath, nil
 }
 
-func runGitCommand(ctx context.Context, dir string, args ...string) (string, error) {
+func runGitCommand(ctx context.Context, dir string, args ...string) (out string, rerr error) {
 	slog.Info(fmt.Sprintf("[%s] $ git %s", dir, strings.Join(args, " ")))
-	defer slog.Info(fmt.Sprintf("[%s] $ git %s (DONE)", dir, strings.Join(args, " ")))
+	defer func() {
+		slog.Info(fmt.Sprintf("[%s] $ git %s (DONE) err=%v", dir, strings.Join(args, " "), rerr))
+	}()
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
@@ -170,17 +172,20 @@ func runGitCommand(ctx context.Context, dir string, args ...string) (string, err
 	return string(output), nil
 }
 
-func (env *Environment) propagateToWorktree(ctx context.Context, name, explanation string) error {
+func (env *Environment) propagateToWorktree(ctx context.Context, name, explanation string) (rerr error) {
 	slog.Info("Propagating to worktree...",
 		"environment.id", env.ID,
 		"environment.name", env.Name,
 		"workdir", env.Workdir,
 		"id", env.ID)
-	defer slog.Info("Propagating to worktree... (DONE)",
-		"environment.id", env.ID,
-		"environment.name", env.Name,
-		"workdir", env.Workdir,
-		"id", env.ID)
+	defer func() {
+		slog.Info("Propagating to worktree... (DONE)",
+			"environment.id", env.ID,
+			"environment.name", env.Name,
+			"workdir", env.Workdir,
+			"id", env.ID,
+			"err", rerr)
+	}()
 
 	worktreePath, err := env.GetWorktreePath()
 	if err != nil {
