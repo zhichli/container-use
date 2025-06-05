@@ -12,7 +12,7 @@ var listCmd = &cobra.Command{
 	Short: "List environments",
 	Long:  `List environments filtering the git remotes`,
 	RunE: func(app *cobra.Command, _ []string) error {
-		cmd := exec.CommandContext(app.Context(), "bash", "-c", "git branch -r | grep 'container-use/.*/' | cut -d/ -f2-")
+		cmd := exec.CommandContext(app.Context(), "bash", "-c", "git branch -r | grep 'container-use/.*/'")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
