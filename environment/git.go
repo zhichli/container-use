@@ -121,14 +121,16 @@ func InitializeLocalRemote(ctx context.Context, localRepoPath string) (string, e
 		return "", err
 	}
 
-	if _, err := os.Stat(cuRepoPath); err == nil {
-		return cuRepoPath, nil
-	}
+	if _, err := os.Stat(cuRepoPath); err != nil {
+		if !os.IsNotExist(err) {
+			return "", err
+		}
 
-	slog.Info("Initializing local remote", "local-repo-path", localRepoPath, "container-use-repo-path", cuRepoPath)
-	_, err = runGitCommand(ctx, localRepoPath, "clone", "--bare", localRepoPath, cuRepoPath)
-	if err != nil {
-		return "", err
+		slog.Info("Initializing local remote", "local-repo-path", localRepoPath, "container-use-repo-path", cuRepoPath)
+		_, err = runGitCommand(ctx, localRepoPath, "clone", "--bare", localRepoPath, cuRepoPath)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	// set up local remote, updating it if it had been created previously at a different path
