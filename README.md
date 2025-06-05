@@ -23,7 +23,7 @@
 ## Installing
 
 ```sh
-go build ./cmd/container-use
+make
 ```
 
 Make sure to put `container-use` in your `$PATH`
