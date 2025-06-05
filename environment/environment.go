@@ -503,9 +503,9 @@ func (env *Environment) Fork(ctx context.Context, explanation, name string, vers
 
 func (env *Environment) Terminal(ctx context.Context) error {
 	container := env.container
-	// Use bash but with the same pretty PS1 as the default /bin/sh terminal in dagger
+	// In case there's bash in the container, show the same pretty PS1 as for the default /bin/sh terminal in dagger
 	container = container.WithNewFile("/root/.bash_aliases", `export PS1="\033[33mdagger\033[0m \033[02m\$(pwd | sed \"s|^\$HOME|~|\")\033[0m \$ "`+"\n")
-	if _, err := container.Terminal(dagger.ContainerTerminalOpts{Cmd: []string{"/bin/bash"}}).Sync(ctx); err != nil {
+	if _, err := container.Terminal(dagger.ContainerTerminalOpts{}).Sync(ctx); err != nil {
 		return err
 	}
 	return nil
