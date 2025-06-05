@@ -153,7 +153,7 @@ func InitializeLocalRemote(ctx context.Context, localRepoPath string) (string, e
 func runGitCommand(ctx context.Context, dir string, args ...string) (out string, rerr error) {
 	slog.Info(fmt.Sprintf("[%s] $ git %s", dir, strings.Join(args, " ")))
 	defer func() {
-		slog.Info(fmt.Sprintf("[%s] $ git %s (DONE) err=%v", dir, strings.Join(args, " "), rerr))
+		slog.Info(fmt.Sprintf("[%s] $ git %s (DONE)", dir, strings.Join(args, " ")), "err", rerr)
 	}()
 
 	cmd := exec.CommandContext(ctx, "git", args...)
