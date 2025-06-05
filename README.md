@@ -28,6 +28,12 @@ It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor
 * 🎮 **Environment Control**: Standard git workflow - just `git checkout <branch_name>` to review any agent's work.
 * 🌎 **Universal Compatibility**: Works with any agent, model, or infrastructure - no vendor lock-in.
 
+---
+
+🦺 This project is in early development and actively evolving. Expect rough edges, breaking changes, and incomplete documentation - but also expect rapid iteration and responsiveness to feedback.
+
+---
+
 ## Installing
 
 ```sh
