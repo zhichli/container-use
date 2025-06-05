@@ -1,6 +1,8 @@
-# container-use
-
-MCP server to add container superpowers to your AI agent
+<p align="center">
+  <img src="./_assets/logo.png" align="center" alt="container-use" />
+  <h2 align="center">container-use</h2>
+  <p align="center">Containerized environments for any coding agent 🤖</p>
+</p>
 
 ## Installing
 
