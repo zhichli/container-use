@@ -46,7 +46,7 @@ This will build the `cu` binary but _NOT_ install it to your `$PATH`. If you wan
 make install
 ```
 
-The `make install` command will put `cu` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
+The `make install` command will put `cu` in your `$PATH`. In order to use it, you will need to restart your terminal or run `hash -r` to refresh your `$PATH` (or equivalent for your shell).
 
 ## Agent Integration
 
