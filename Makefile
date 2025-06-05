@@ -1,7 +1,7 @@
-all: install-bin
+all: build
 
-.PHONY: cu
-cu:
+.PHONY: build
+build:
 	@which docker >/dev/null || ( echo "Please follow instructions to install Docker at https://docs.docker.com/get-started/get-docker/"; exit 1 )
 	@docker build --platform local -o . .
 	@ls cu
@@ -24,11 +24,11 @@ find-path:
 		done; \
 	fi
 
-.PHONY: install-bin
-install-bin: container-use
+.PHONY: install
+install: build
 	@DEST=$$(make find-path | tail -n 1); \
 	if [ -z "$$DEST" ]; then \
 		echo "No writable directory found in \$PATH"; exit 1; \
 	fi; \
-	echo "Installing container-use to $$DEST..."; \
-	mv container-use "$$DEST/"
+	echo "Installing cu to $$DEST..."; \
+	mv cu "$$DEST/"
