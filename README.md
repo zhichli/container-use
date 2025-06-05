@@ -40,7 +40,13 @@ It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor
 make
 ```
 
-The make command above will put `cu` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
+This will build the `cu` binary but _NOT_ install it to your `$PATH`. If you want to build and install the binary into your `$PATH`, run:
+
+```sh
+make install
+```
+
+The `make install` command will put `cu` in your `$PATH`. In order to use it, you will need to restart your terminal or run `source ~/.bashrc` (or equivalent for your shell).
 
 ## Agent Integration
 
