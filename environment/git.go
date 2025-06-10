@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	gitNotesLogRef   = "container-use"
-	gitNotesStateRef = "container-use-state"
+	containerUseRemote = "container-use"
+	gitNotesLogRef     = "container-use"
+	gitNotesStateRef   = "container-use-state"
 )
 
 // 10MB
@@ -66,7 +67,7 @@ func (env *Environment) DeleteLocalRemoteBranch() error {
 		return err
 	}
 
-	if _, err = runGitCommand(context.Background(), localRepoPath, "remote", "prune", "container-use"); err != nil {
+	if _, err = runGitCommand(context.Background(), localRepoPath, "remote", "prune", containerUseRemote); err != nil {
 		slog.Error("Failed to fetch and prune container-use remote", "local-repo", localRepoPath, "err", err)
 		return err
 	}
@@ -95,7 +96,7 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 	}
 
 	slog.Info("Initializing worktree", "container-id", env.ID, "container-name", env.Name, "id", env.ID)
-	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use")
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", containerUseRemote)
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +109,7 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 
 	// this is racy, i think? like if a human is rewriting history on a branch and creating containers, things get complicated.
 	// there's only 1 copy of the source branch in the localremote, so there's potential for conflicts.
-	_, err = runGitCommand(ctx, localRepoPath, "push", "container-use", "--force", currentBranch)
+	_, err = runGitCommand(ctx, localRepoPath, "push", containerUseRemote, "--force", currentBranch)
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +132,7 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 		return "", fmt.Errorf("failed to apply uncommitted changes: %w", err)
 	}
 
-	_, err = runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.ID)
+	_, err = runGitCommand(ctx, localRepoPath, "fetch", containerUseRemote, env.ID)
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +140,7 @@ func (env *Environment) InitializeWorktree(ctx context.Context, localRepoPath st
 	// set up remote tracking branch if it's not already there
 	_, err = runGitCommand(ctx, localRepoPath, "show-ref", "--verify", "--quiet", fmt.Sprintf("refs/heads/%s", env.ID))
 	if err != nil {
-		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", env.ID, fmt.Sprintf("container-use/%s", env.ID))
+		_, err = runGitCommand(ctx, localRepoPath, "branch", "--track", env.ID, fmt.Sprintf("%s/%s", containerUseRemote, env.ID))
 		if err != nil {
 			return "", err
 		}
@@ -173,16 +174,16 @@ func InitializeLocalRemote(ctx context.Context, localRepoPath string) (string, e
 	}
 
 	// set up local remote, updating it if it had been created previously at a different path
-	existingURL, err := runGitCommand(ctx, localRepoPath, "remote", "get-url", "container-use")
+	existingURL, err := runGitCommand(ctx, localRepoPath, "remote", "get-url", containerUseRemote)
 	if err != nil {
-		_, err = runGitCommand(ctx, localRepoPath, "remote", "add", "container-use", cuRepoPath)
+		_, err = runGitCommand(ctx, localRepoPath, "remote", "add", containerUseRemote, cuRepoPath)
 		if err != nil {
 			return "", err
 		}
 	} else {
 		existingURL = strings.TrimSpace(existingURL)
 		if existingURL != cuRepoPath {
-			_, err = runGitCommand(ctx, localRepoPath, "remote", "set-url", "container-use", cuRepoPath)
+			_, err = runGitCommand(ctx, localRepoPath, "remote", "set-url", containerUseRemote, cuRepoPath)
 			if err != nil {
 				return "", err
 			}
@@ -261,7 +262,7 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 	}
 
 	slog.Info("Fetching container-use remote in source repository")
-	if _, err := runGitCommand(ctx, localRepoPath, "fetch", "container-use", env.ID); err != nil {
+	if _, err := runGitCommand(ctx, localRepoPath, "fetch", containerUseRemote, env.ID); err != nil {
 		return err
 	}
 
@@ -275,7 +276,7 @@ func (env *Environment) propagateToWorktree(ctx context.Context, name, explanati
 func (env *Environment) propagateGitNotes(ctx context.Context, ref string) error {
 	fullRef := fmt.Sprintf("refs/notes/%s", ref)
 	fetch := func() error {
-		_, err := runGitCommand(ctx, env.Source, "fetch", "container-use", fullRef+":"+fullRef)
+		_, err := runGitCommand(ctx, env.Source, "fetch", containerUseRemote, fullRef+":"+fullRef)
 		return err
 	}
 
@@ -312,7 +313,7 @@ func (env *Environment) commitStateToNotes(ctx context.Context) error {
 }
 
 func (env *Environment) addGitNote(ctx context.Context, note string) error {
-	_, err := runGitCommand(ctx, env.Worktree, "notes", "--ref", "container-use", "append", "-m", note)
+	_, err := runGitCommand(ctx, env.Worktree, "notes", "--ref", gitNotesLogRef, "append", "-m", note)
 	if err != nil {
 		return err
 	}
