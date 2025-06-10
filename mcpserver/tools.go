@@ -273,9 +273,20 @@ var EnvironmentListTool = &Tool{
 		mcp.WithString("explanation",
 			mcp.Description("One sentence explanation for why this environment is being listed."),
 		),
+		mcp.WithString("source",
+			mcp.Description("The source directory of the environment."), //  This can be a local folder (e.g. file://) or a URL to a git repository (e.g. https://github.com/user/repo.git, git@github.com:user/repo.git)"),
+			mcp.Required(),
+		),
 	),
 	Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		envs := environment.List()
+		source, err := request.RequireString("source")
+		if err != nil {
+			return nil, err
+		}
+		envs, err := environment.List(ctx, source)
+		if err != nil {
+			return mcp.NewToolResultErrorFromErr("invalid source", err), nil
+		}
 		out, err := json.Marshal(envs)
 		if err != nil {
 			return nil, err
