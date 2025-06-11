@@ -17,9 +17,10 @@ var mergeCmd = &cobra.Command{
 		env := args[0]
 		// prevent accidental single quotes to mess up command
 		env = strings.Trim(env, "'")
-		cmd := exec.CommandContext(app.Context(), "bash", "-c", fmt.Sprintf("git stash --include-untracked -q && git merge -m 'Merge environment %s' -- %q && ( git stash pop -q 2>/dev/null )", env, "container-use/"+env))
+		cmd := exec.CommandContext(app.Context(), "bash", "-c", fmt.Sprintf("git stash --include-untracked -q && git merge -m 'Merge environment %s' -- %q && ( git stash pop -q 2>/dev/null || true )", env, "container-use/"+env))
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
 
 		return cmd.Run()
 	},
