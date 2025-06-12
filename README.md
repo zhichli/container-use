@@ -7,7 +7,7 @@
     <a href="https://opensource.org/licenses/Apache-2.0">
       <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
     </a>
-    <a href="https://discord.gg/UhXqKz7SRM">
+    <a href="https://discord.gg/YXbtwRQv">
       <img src="https://img.shields.io/discord/707636530424053791?logo=discord&logoColor=white&label=Discord&color=7289DA" alt="Discord">
     </a>
   </p>
