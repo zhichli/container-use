@@ -165,7 +165,7 @@ DO NOT manually install toolchains inside the environment, instead explicitly ca
 			mcp.Description("One sentence explanation for why this environment is being opened or created."),
 		),
 		mcp.WithString("source",
-			mcp.Description("The source directory of the environment."), //  This can be a local folder (e.g. file://) or a URL to a git repository (e.g. https://github.com/user/repo.git, git@github.com:user/repo.git)"),
+			mcp.Description("Absolute path to the source git repository for the environment."),
 			mcp.Required(),
 		),
 		mcp.WithString("name",
