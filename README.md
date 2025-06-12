@@ -79,6 +79,37 @@ Save the CLAUDE.md file at the root of the repository. Alternatively, merge the 
 curl https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md >> CLAUDE.md
 ```
 
+### [Amazon Q Developer CLI chat](https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/command-line-chat.html)
+
+Add this container-use MCP config to `~/.aws/amazonq/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "container-use": {
+      "command": "cu",
+      "args": [
+        "stdio"
+      ],
+      "env": {},
+      "timeout": 60000
+    }
+  }
+}
+```
+
+Save the agent instructions for Container Use to your project root at `./.amazonq/rules/container-use.md`:
+
+```sh
+mkdir -p ./.amazonq/rules && curl https://raw.githubusercontent.com/dagger/container-use/main/rules/agent.md > .amazonq/rules/container-use.md
+```
+
+To trust only the Container Use environment tools, invoke Q chat like this:
+
+```sh
+q chat --trust-tools=container_use___environment_checkpoint,container_use___environment_file_delete,container_use___environment_file_list,container_use___environment_file_read,container_use___environment_file_write,container_use___environment_open,container_use___environment_run_cmd,container_use___environment_update
+```
+
 ### [goose](https://block.github.io/goose/docs/getting-started/using-extensions#mcp-servers)
 
 Add this to `~/.config/goose/config.yaml`:
