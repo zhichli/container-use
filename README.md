@@ -29,7 +29,7 @@ It's an open-source MCP server that works as a CLI tool with Claude Code, Cursor
 
 ---
 
-🦺 This project is in early development and actively evolving. Expect rough edges, breaking changes, and incomplete documentation. But also expect rapid iteration and responsiveness to feedback.
+🦺 This project is in early development and actively evolving. Expect rough edges, breaking changes, and incomplete documentation. But also expect rapid iteration and responsiveness to feedback. Please submit issues and/or reach out to us on [Discord](https://discord.gg/Nf42dydvrX) in the #container-use channel. 
 
 ---
 
