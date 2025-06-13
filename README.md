@@ -110,6 +110,8 @@ To trust only the Container Use environment tools, invoke Q chat like this:
 q chat --trust-tools=container_use___environment_checkpoint,container_use___environment_file_delete,container_use___environment_file_list,container_use___environment_file_read,container_use___environment_file_write,container_use___environment_open,container_use___environment_run_cmd,container_use___environment_update
 ```
 
+[Watch video walkthrough.](https://youtu.be/C2g3vdbffOI)
+
 ### [goose](https://block.github.io/goose/docs/getting-started/using-extensions#mcp-servers)
 
 Add this to `~/.config/goose/config.yaml`:
