@@ -519,7 +519,14 @@ func (env *Environment) Terminal(ctx context.Context) error {
 	container := env.container
 	// In case there's bash in the container, show the same pretty PS1 as for the default /bin/sh terminal in dagger
 	container = container.WithNewFile("/root/.bash_aliases", `export PS1="\033[33mdagger\033[0m \033[02m\$(pwd | sed \"s|^\$HOME|~|\")\033[0m \$ "`+"\n")
-	if _, err := container.Terminal(dagger.ContainerTerminalOpts{}).Sync(ctx); err != nil {
+	defaultShell := []string{}
+	// Check if bash is available
+	if _, err := container.WithExec([]string{"grep", "/bash", "/etc/shells"}).Sync(ctx); err == nil {
+		defaultShell = []string{"bash"}
+	}
+	if _, err := container.Terminal(dagger.ContainerTerminalOpts{
+		Cmd: defaultShell,
+	}).Sync(ctx); err != nil {
 		return err
 	}
 	return nil
