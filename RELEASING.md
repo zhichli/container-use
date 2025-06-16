@@ -4,9 +4,10 @@
 
 1. **Fetch the latest main branch**
    ```sh
-   git checkout main
-   git pull origin main
+   git fetch origin main
+   git checkout origin/main
    ```
+   NOTE: this puts you on a detached head, which is fine for tagging and pushing the tag.
 
 2. **Tag the release**
    ```sh
@@ -27,5 +28,9 @@
 5. **Publish the release**
    - Edit the draft release if needed
    - Click "Publish release"
+
+6. **Merge the homebrew tap PR**
+   - After publishing the release, a PR will be automatically created in [dagger/homebrew-tap](https://github.com/dagger/homebrew-tap)
+   - Review and merge the PR to make the release available via Homebrew
 
 The Dagger CI automatically handles building binaries and creating the draft release when tags are pushed.
