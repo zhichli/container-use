@@ -21,8 +21,8 @@ type Service struct {
 }
 
 type EndpointMapping struct {
-	Internal string `json:"internal"`
-	External string `json:"external"`
+	EnvironmentInternal string `json:"environment_internal"`
+	HostExternal        string `json:"host_external"`
 }
 
 type EndpointMappings map[int]*EndpointMapping
@@ -81,7 +81,7 @@ func (env *Environment) startService(ctx context.Context, cfg *ServiceConfig) (*
 	endpoints := EndpointMappings{}
 	for _, port := range cfg.ExposedPorts {
 		endpoint := &EndpointMapping{
-			Internal: fmt.Sprintf("%s:%d", cfg.Name, port),
+			EnvironmentInternal: fmt.Sprintf("%s:%d", cfg.Name, port),
 		}
 		endpoints[port] = endpoint
 
@@ -103,7 +103,7 @@ func (env *Environment) startService(ctx context.Context, cfg *ServiceConfig) (*
 		if err != nil {
 			return nil, fmt.Errorf("failed to get endpoint for service %s: %w", cfg.Name, err)
 		}
-		endpoint.External = externalEndpoint
+		endpoint.HostExternal = externalEndpoint
 	}
 
 	return &Service{
@@ -125,7 +125,7 @@ func (env *Environment) AddService(ctx context.Context, explanation string, cfg 
 	env.Services = append(env.Services, svc)
 
 	state := env.container().WithServiceBinding(cfg.Name, svc.svc)
-	if err := env.apply(ctx, "Add service "+cfg.Name, explanation, "", state); err != nil {
+	if err := env.apply(ctx, state); err != nil {
 		return nil, err
 	}
 

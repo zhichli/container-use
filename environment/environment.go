@@ -20,7 +20,8 @@ type EnvironmentInfo struct {
 	Config *EnvironmentConfig
 	State  *State
 
-	ID       string
+	ID string
+	//TODO(braa): I think we only need this for Export, now. remove and pass explicitly.
 	Worktree string
 }
 
@@ -35,7 +36,7 @@ type Environment struct {
 	mu sync.RWMutex
 }
 
-func New(ctx context.Context, dag *dagger.Client, id, title, worktree string) (*Environment, error) {
+func New(ctx context.Context, dag *dagger.Client, id, title, worktree string, initialSourceDir *dagger.Directory) (*Environment, error) {
 	env := &Environment{
 		EnvironmentInfo: &EnvironmentInfo{
 			ID:       id,
@@ -56,14 +57,14 @@ func New(ctx context.Context, dag *dagger.Client, id, title, worktree string) (*
 		}
 	}
 
-	container, err := env.buildBase(ctx)
+	container, err := env.buildBase(ctx, initialSourceDir)
 	if err != nil {
 		return nil, err
 	}
 
 	slog.Info("Creating environment", "id", env.ID, "workdir", env.Config.Workdir)
 
-	if err := env.apply(ctx, "Create environment", "Create the environment", "", container); err != nil {
+	if err := env.apply(ctx, container); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +133,8 @@ func LoadInfo(ctx context.Context, id string, state []byte, worktree string) (*E
 	return envInfo, nil
 }
 
-func (env *Environment) apply(ctx context.Context, name, explanation, output string, newState *dagger.Container) error {
+func (env *Environment) apply(ctx context.Context, newState *dagger.Container) error {
+	// TODO(braa): is this sync redundant with newState.ID?
 	if _, err := newState.Sync(ctx); err != nil {
 		return err
 	}
@@ -173,11 +175,7 @@ func containerWithEnvAndSecrets(dag *dagger.Client, container *dagger.Container,
 	return container, nil
 }
 
-func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error) {
-	sourceDir := env.dag.Host().Directory(env.Worktree, dagger.HostDirectoryOpts{
-		NoCache: true,
-	})
-
+func (env *Environment) buildBase(ctx context.Context, baseSourceDir *dagger.Directory) (*dagger.Container, error) {
 	container := env.dag.
 		Container().
 		From(env.Config.BaseImage).
@@ -215,7 +213,7 @@ func (env *Environment) buildBase(ctx context.Context) (*dagger.Container, error
 		container = container.WithServiceBinding(service.Config.Name, service.svc)
 	}
 
-	container = container.WithDirectory(".", sourceDir)
+	container = container.WithDirectory(".", baseSourceDir)
 
 	return container, nil
 }
@@ -227,42 +225,67 @@ func (env *Environment) UpdateConfig(ctx context.Context, explanation string, ne
 
 	env.Config = newConfig
 
-	// Re-build the base image from the worktree
-	container, err := env.buildBase(ctx)
+	// Get current working directory from container to preserve changes
+	currentWorkdir := env.container().Directory(env.Config.Workdir)
+
+	// Re-build the base image with the new config
+	container, err := env.buildBase(ctx, currentWorkdir)
 	if err != nil {
 		return err
 	}
 
-	if err := env.apply(ctx, "Update environment", explanation, "", container); err != nil {
+	if err := env.apply(ctx, container); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (env *Environment) Run(ctx context.Context, explanation, command, shell string, useEntrypoint bool) (string, error) {
+func (env *Environment) Run(ctx context.Context, command, shell string, useEntrypoint bool) (string, error) {
 	args := []string{}
 	if command != "" {
 		args = []string{shell, "-c", command}
 	}
 	newState := env.container().WithExec(args, dagger.ContainerWithExecOpts{
 		UseEntrypoint: useEntrypoint,
+		Expect:        dagger.ReturnTypeAny, // Don't treat non-zero exit as error
 	})
+
+	exitCode, err := newState.ExitCode(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get exit code: %w", err)
+	}
+
 	stdout, err := newState.Stdout(ctx)
 	if err != nil {
-		var exitErr *dagger.ExecError
-		if errors.As(err, &exitErr) {
-			env.Notes.Add("$ %s\nexit %d\nstdout: %s\nstderr: %s\n\n", command, exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr)
-			return fmt.Sprintf("command failed with exit code %d.\nstdout: %s\nstderr: %s", exitErr.ExitCode, exitErr.Stdout, exitErr.Stderr), nil
-		}
-		return "", err
+		return "", fmt.Errorf("failed to get stdout: %w", err)
 	}
-	env.Notes.Add("$ %s\n%s\n\n", command, stdout)
 
-	return stdout, nil
+	stderr, err := newState.Stderr(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get stderr: %w", err)
+	}
+
+	// Log the command execution with all details
+	env.Notes.Add("$ %s\nexit %d\nstdout: %s\nstderr: %s\n\n", command, exitCode, stdout, stderr)
+
+	// Always apply the container state (preserving changes even on non-zero exit)
+	if err := env.apply(ctx, newState); err != nil {
+		return stdout, fmt.Errorf("failed to apply container state: %w", err)
+	}
+
+	// Return combined output (stdout + stderr if there was stderr)
+	combinedOutput := stdout
+	if stderr != "" {
+		if stdout != "" {
+			combinedOutput += "\n"
+		}
+		combinedOutput += "stderr: " + stderr
+	}
+	return combinedOutput, nil
 }
 
-func (env *Environment) RunBackground(ctx context.Context, explanation, command, shell string, ports []int, useEntrypoint bool) (EndpointMappings, error) {
+func (env *Environment) RunBackground(ctx context.Context, command, shell string, ports []int, useEntrypoint bool) (EndpointMappings, error) {
 	args := []string{}
 	if command != "" {
 		args = []string{shell, "-c", command}
@@ -316,7 +339,7 @@ func (env *Environment) RunBackground(ctx context.Context, explanation, command,
 		if err != nil {
 			return nil, err
 		}
-		endpoint.External = externalEndpoint
+		endpoint.HostExternal = externalEndpoint
 
 		internalEndpoint, err := svc.Endpoint(ctx, dagger.ServiceEndpointOpts{
 			Port: port,
@@ -324,7 +347,7 @@ func (env *Environment) RunBackground(ctx context.Context, explanation, command,
 		if err != nil {
 			return nil, err
 		}
-		endpoint.Internal = internalEndpoint
+		endpoint.EnvironmentInternal = internalEndpoint
 	}
 
 	return endpoints, nil

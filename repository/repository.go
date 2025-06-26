@@ -157,7 +157,28 @@ func (r *Repository) Create(ctx context.Context, dag *dagger.Client, description
 		return nil, err
 	}
 
-	env, err := environment.New(ctx, dag, id, description, worktree)
+	worktreeHead, err := RunGitCommand(ctx, worktree, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	worktreeHead = strings.TrimSpace(worktreeHead)
+
+	baseSourceDir, err := dag.
+		Host().
+		Directory(r.forkRepoPath, dagger.HostDirectoryOpts{NoCache: true}). // bust cache for each Create call
+		AsGit().
+		Ref(worktreeHead).
+		Tree(dagger.GitRefTreeOpts{DiscardGitDir: true}).
+		WithNewFile(
+			".git", // make .git point back at the fork repo TODO(braa): ideally we do this on export, but we'd need to move some of that logic into repository
+			fmt.Sprintf("gitdir: %s/worktrees/%s", r.forkRepoPath, id),
+		).
+		Sync(ctx) // don't bust cache when loading from state
+	if err != nil {
+		return nil, fmt.Errorf("failed loading initial source directory: %w", err)
+	}
+
+	env, err := environment.New(ctx, dag, id, description, worktree, baseSourceDir)
 	if err != nil {
 		return nil, err
 	}
