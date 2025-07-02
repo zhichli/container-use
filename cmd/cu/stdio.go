@@ -21,10 +21,11 @@ var stdioCmd = &cobra.Command{
 		dag, err := dagger.Connect(ctx, dagger.WithLogOutput(logWriter))
 		if err != nil {
 			slog.Error("Error starting dagger", "error", err)
-			if err != nil {
-				slog.Error("Error starting dagger", "error", err)
-				os.Exit(1)
+
+			if isDockerDaemonError(err) {
+				handleDockerDaemonError()
 			}
+
 			os.Exit(1)
 		}
 		defer dag.Close()
