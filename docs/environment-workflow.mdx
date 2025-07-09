@@ -1,7 +1,7 @@
 ---
-title: Managing Environments
+title: Environment Workflow
 description: "Master the workflow of creating, observing, and managing containerized environments. Learn when to merge work, iterate on prompts, or start fresh."
-icon: gear
+icon: arrows-rotate
 ---
 
 ## What are Environments?
@@ -55,6 +55,10 @@ container-use diff fancy-mallard
 <Card title="When to use" icon="eye">
   Use quick assessment when you want to rapidly understand if the agent is on the right track, see what files changed, or review the approach before diving deeper.
 </Card>
+
+<Note>
+  🔒 **Secret Security**: If the agent used any secrets (API keys, database credentials), these were resolved within the container environment - agents can use your credentials without the AI model ever seeing the actual values.
+</Note>
 
 ### Deep Exploration (Interactive)
 
@@ -256,10 +260,10 @@ Each environment is completely isolated - no conflicts, no interference.
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Try Multiple Agents" icon="users">
-    Experiment with running multiple agents in parallel environments
+  <Card title="Environment Configuration" icon="gear" href="/environment-configuration">
+    Configure your project's default environment setup
   </Card>
   <Card title="Join Community" icon="discord" href="https://discord.gg/YXbtwRQv">
-    Share your environment management strategies in #container-use
+    Share your environment workflow strategies in #container-use
   </Card>
 </CardGroup>
