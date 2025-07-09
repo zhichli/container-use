@@ -77,6 +77,10 @@ func RunStdioServer(ctx context.Context, dag *dagger.Client) error {
 
 var tools = []*Tool{}
 
+func Tools() []*Tool {
+	return tools
+}
+
 func registerTool(tool ...*Tool) {
 	for _, t := range tool {
 		tools = append(tools, wrapTool(t))
@@ -653,7 +657,7 @@ var EnvironmentFileReadTool = &Tool{
 		mcp.WithBoolean("should_read_entire_file",
 			mcp.Description("Whether to read the entire file. Defaults to false."),
 		),
-		mcp.WithNumber("start_line_one_indexed",
+		mcp.WithNumber("start_line_one_indexed_inclusive",
 			mcp.Description("The one-indexed line number to start reading from (inclusive)."),
 		),
 		mcp.WithNumber("end_line_one_indexed_inclusive",
@@ -680,10 +684,10 @@ var EnvironmentFileReadTool = &Tool{
 		}
 
 		shouldReadEntireFile := request.GetBool("should_read_entire_file", false)
-		startLineOneIndexed := request.GetInt("start_line_one_indexed", 0)
+		startLineOneIndexedInclusive := request.GetInt("start_line_one_indexed_inclusive", 0)
 		endLineOneIndexedInclusive := request.GetInt("end_line_one_indexed_inclusive", 0)
 
-		fileContents, err := ReadEnvironmentFile(ctx, dag, source, envID, targetFile, shouldReadEntireFile, startLineOneIndexed, endLineOneIndexedInclusive)
+		fileContents, err := ReadEnvironmentFile(ctx, dag, source, envID, targetFile, shouldReadEntireFile, startLineOneIndexedInclusive, endLineOneIndexedInclusive)
 		if err != nil {
 			return mcp.NewToolResultErrorFromErr(err.Error(), err), nil
 		}
@@ -693,7 +697,7 @@ var EnvironmentFileReadTool = &Tool{
 }
 
 // ReadEnvironmentFile reads a file from an environment
-func ReadEnvironmentFile(ctx context.Context, dag *dagger.Client, source, envID, targetFile string, shouldReadEntireFile bool, startLineOneIndexed, endLineOneIndexedInclusive int) (string, error) {
+func ReadEnvironmentFile(ctx context.Context, dag *dagger.Client, source, envID, targetFile string, shouldReadEntireFile bool, startLineOneIndexedInclusive, endLineOneIndexedInclusive int) (string, error) {
 	repo, err := repository.Open(ctx, source)
 	if err != nil {
 		return "", err
@@ -704,7 +708,7 @@ func ReadEnvironmentFile(ctx context.Context, dag *dagger.Client, source, envID,
 		return "", err
 	}
 
-	fileContents, err := env.FileRead(ctx, targetFile, shouldReadEntireFile, startLineOneIndexed, endLineOneIndexedInclusive)
+	fileContents, err := env.FileRead(ctx, targetFile, shouldReadEntireFile, startLineOneIndexedInclusive, endLineOneIndexedInclusive)
 	if err != nil {
 		return "", err
 	}
