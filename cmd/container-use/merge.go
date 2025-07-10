@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -41,18 +42,20 @@ container-use merge --delete backend-api`,
 			return fmt.Errorf("failed to merge environment: %w", err)
 		}
 
-		// Delete the environment if the flag is set and merge was successful
-		if mergeDelete {
-			if err := repo.Delete(ctx, env); err != nil {
-				return fmt.Errorf("merge succeeded but failed to delete environment: %w", err)
-			}
-			fmt.Printf("Environment '%s' merged and deleted successfully.\n", env)
-		} else {
-			fmt.Printf("Environment '%s' merged successfully.\n", env)
-		}
-
-		return nil
+		return deleteAfterMerge(ctx, repo, env, mergeDelete, "merged")
 	},
+}
+
+func deleteAfterMerge(ctx context.Context, repo *repository.Repository, env string, delete bool, verb string) error {
+	if !delete {
+		fmt.Printf("Environment '%s' %s successfully.\n", env, verb)
+		return nil
+	}
+	if err := repo.Delete(ctx, env); err != nil {
+		return fmt.Errorf("environment '%s' %s but delete failed: %w", env, verb, err)
+	}
+	fmt.Printf("Environment '%s' %s and deleted successfully.\n", env, verb)
+	return nil
 }
 
 func init() {

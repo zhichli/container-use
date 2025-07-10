@@ -406,14 +406,14 @@ func (r *Repository) Merge(ctx context.Context, id string, w io.Writer) error {
 		return err
 	}
 
-	output, err := RunGitCommand(ctx, r.userRepoPath, "stash", "save", "--include-untracked", "container-use: stash before merging "+envInfo.ID)
-	if err == nil {
-		if !strings.Contains(output, "No local changes to save") {
-			defer func() {
-				_ = RunInteractiveGitCommand(ctx, r.userRepoPath, w, "stash", "pop", "-q")
-			}()
-		}
+	return RunInteractiveGitCommand(ctx, r.userRepoPath, w, "merge", "--no-ff", "--autostash", "-m", "Merge environment "+envInfo.ID, "--", "container-use/"+envInfo.ID)
+}
+
+func (r *Repository) Apply(ctx context.Context, id string, w io.Writer) error {
+	envInfo, err := r.Info(ctx, id)
+	if err != nil {
+		return err
 	}
 
-	return RunInteractiveGitCommand(ctx, r.userRepoPath, w, "merge", "-m", "Merge environment "+envInfo.ID, "--", "container-use/"+envInfo.ID)
+	return RunInteractiveGitCommand(ctx, r.userRepoPath, w, "merge", "--autostash", "--squash", "--", "container-use/"+envInfo.ID)
 }
