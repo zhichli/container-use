@@ -9,9 +9,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -28,6 +28,33 @@ var (
 	urlSchemeRegExp  = regexp.MustCompile(`^[^:]+://`)
 	scpLikeURLRegExp = regexp.MustCompile(`^(?:(?P<user>[^@]+)@)?(?P<host>[^:\s]+):(?:(?P<port>[0-9]{1,5})(?:\/|:))?(?P<path>[^\\].*\/[^\\].*)$`)
 )
+
+// sanitizePathForDirectory converts an absolute path to a safe directory name
+// On Windows, this handles drive letters and other problematic characters
+func sanitizePathForDirectory(path string) string {
+	if runtime.GOOS != "windows" {
+		return path
+	}
+
+	// Convert backslashes to forward slashes for consistency
+	path = filepath.ToSlash(path)
+
+	// Handle Windows drive letters (C: -> C_)
+	if len(path) >= 2 && path[1] == ':' {
+		path = string(path[0]) + "_" + path[2:]
+	}
+
+	// Replace any remaining colons and other problematic characters
+	path = strings.ReplaceAll(path, ":", "_")
+	path = strings.ReplaceAll(path, "<", "_")
+	path = strings.ReplaceAll(path, ">", "_")
+	path = strings.ReplaceAll(path, "|", "_")
+	path = strings.ReplaceAll(path, "?", "_")
+	path = strings.ReplaceAll(path, "*", "_")
+	path = strings.ReplaceAll(path, "\"", "_")
+
+	return path
+}
 
 // RunGitCommand executes a git command in the specified directory.
 // This is exported for use in tests and other packages that need direct git access.
@@ -84,7 +111,7 @@ func getContainerUseRemote(ctx context.Context, repo string) (string, error) {
 }
 
 func (r *Repository) WorktreePath(id string) (string, error) {
-	return homedir.Expand(path.Join(r.getWorktreePath(), id))
+	return homedir.Expand(filepath.Join(r.getWorktreePath(), id))
 }
 
 func (r *Repository) deleteWorktree(id string) error {
@@ -526,7 +553,9 @@ func (r *Repository) normalizeForkPath(ctx context.Context, repo string) (string
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
 			// Exit code 2 means the remote doesn't exist
-			return homedir.Expand(filepath.Join(r.getRepoPath(), repo))
+			// Sanitize the repo path for use as a directory name
+			sanitizedRepo := sanitizePathForDirectory(repo)
+			return homedir.Expand(filepath.Join(r.getRepoPath(), sanitizedRepo))
 		}
 		return "", err
 	}
