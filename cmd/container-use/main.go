@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"runtime"
 	"syscall"
 
@@ -26,9 +25,7 @@ Each environment runs in its own container with dedicated git branches.`,
 
 func main() {
 	ctx := context.Background()
-	sigusrCh := make(chan os.Signal, 1)
-	signal.Notify(sigusrCh, syscall.SIGUSR1)
-	go handleSIGUSR(sigusrCh)
+	setupSignalHandling()
 
 	if err := setupLogger(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup logger: %v\n", err)
@@ -53,14 +50,6 @@ func main() {
 		fang.WithNotifySignal(os.Interrupt, os.Kill, syscall.SIGTERM),
 	); err != nil {
 		os.Exit(1)
-	}
-}
-
-func handleSIGUSR(sigusrCh <-chan os.Signal) {
-	for sig := range sigusrCh {
-		if sig == syscall.SIGUSR1 {
-			dumpStacks()
-		}
 	}
 }
 
