@@ -30,7 +30,7 @@ Instead of using the generic environment, you can specify exactly what base imag
     During work, the agent may modify its environment configuration - adding tools, changing base images, or setting variables
   </Step>
   <Step title="View Agent Changes">
-    Use `container-use config view <env>` to see what configuration changes the agent made
+    Use `container-use config show <env>` to see what configuration changes the agent made
   </Step>
   <Step title="Import Useful Changes">
     Use `container-use config import <env>` to adopt the agent's configuration improvements as your new defaults
@@ -91,11 +91,11 @@ After an agent completes work, you can inspect any configuration changes it made
 
 ```bash
 # See the configuration for a specific environment
-container-use config view fancy-mallard
+container-use config show fancy-mallard
 
 # Compare with your defaults
 container-use config show        # Your defaults
-container-use config view fancy-mallard  # Agent's configuration
+container-use config show fancy-mallard  # Agent's configuration
 ```
 
 ## Importing Agent Configurations
